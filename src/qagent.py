@@ -80,7 +80,22 @@ class QAgent:
                 return best_actions[0]  # always the first action to avoid stochasticity
             else:
                 return rd.choice(self.actions)  # fallback to random action if no best actions found
-    
+            
+    def update_qvalue(self, q, state, action, reward, next_state):
+        qvalues = self.get_qvalues(q, state)
+        if action not in qvalues:
+            qvalues[action] = 0.0
 
-    
-    
+        # Update Q-value using the Q-learning formula
+        max_next_q = max(self.get_qvalues(q, next_state).values(), default=0)
+        qvalues[action] += self.alpha * (reward + self.gamma * max_next_q - qvalues[action])
+        
+        # update epsilon
+        if self.decay_method == "linear":
+            self.epsilon -= self.epsilon_decay
+        elif self.decay_method == "exponential":
+            self.epsilon *= self.epsilon_decay
+
+    def update_qfunctions(self, state, action, reward, next_state):
+        for q in self.preferences:
+            self.update_qvalue(q, state, action, reward, next_state)
