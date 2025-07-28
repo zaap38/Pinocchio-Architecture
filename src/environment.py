@@ -1,5 +1,7 @@
 from pinocchio import *
 
+import matplotlib.pyplot as plt
+
 
 WALL = 0
 ROAD = 1
@@ -47,6 +49,10 @@ class Environment:
         self.agents = []
         self.pos = {}  # position of each agent
 
+        self.steps = 1000
+
+        self.historic = []
+
     def addAgent(self, agent):
         self.agents.append(agent)
         self.pos[agent.name] = [1, 1]  # default position, can be changed later
@@ -82,13 +88,23 @@ class Environment:
         pass
 
     def loadPacman(self):
+        self.steps = 1000
         actions = ["up", "down", "left", "right"]
         self.loadFile("src/environments/basic_5x5.txt")
-        self.addAgent(Pinocchio("Pacman"))
+        
+        pacman = Pinocchio("Pacman")
+        pacman.loadOptimalAgent(self.steps)
+        self.agents.append(pacman)
+
         for agent in self.agents:
             agent.setActions(actions)
-            agent.isRandom = True  # comment this
-            agent.pos = [1, 1]
+            # agent.isRandom = True  # comment this
+            self.setPos(agent, [1, 1])  # default position
+
+    def setPos(self, agent_name, pos):
+        if type(agent_name) != str:
+            agent_name = agent_name.name
+        self.pos[agent_name] = pos
 
     def display(self):
         cp_grid = cp.deepcopy(self.grid)
@@ -99,25 +115,70 @@ class Environment:
             print("".join(SYMBOLS[cell.type] for cell in row))
 
     def run(self, display=False):
-        for i in range(100):
-            self.step()
+
+        logs = []
+
+        for i in range(self.steps):
+            log = self.step()
+            logs.append(log)
             if display:
                 self.display()
+                
+            # Compute average reward over the last 20 logs
+            last_logs = logs[-20:] if len(logs) >= 20 else logs
+            total_reward = 0
+            for log in last_logs:
+                if isinstance(log, dict) and "R" in log:
+                    total_reward += log["R"]
+            avg_reward = total_reward / len(last_logs) if last_logs else 0
+            print(f"Average reward over last {len(last_logs)} steps: {avg_reward}")
+
+        run_hist = {}
+        run_hist["id"] = len(self.historic)
+        run_hist["steps"] = self.steps
+        run_hist["logs"] = logs
+        self.historic.append(run_hist)
+
+        self.print_historic(logs)
+
+    def print_historic(self, logs):
+        rewards = []
+        for log in logs:
+            if isinstance(log, dict) and "R" in log:
+                rewards.append(log["R"])
+            elif isinstance(log, list) and len(log) > 0 and isinstance(log[-1], dict) and "R" in log[-1]:
+                rewards.append(log[-1]["R"])
+            else:
+                rewards.append(0)
+
+        plt.plot(rewards)
+        plt.xlabel("Step")
+        plt.ylabel("Reward")
+        plt.title("Reward Evolution")
+        plt.show()
 
     def step(self):
+        all_signals = []
         for agent in self.agents:
-            state = self.getState()
+            state = self.getStateHash()
             action = agent.getAction(state)
-            print(action)
+            print(agent.getQValues("R", state))
             signals = self.doAction(agent, action)
-            next_state = self.getState()
+            all_signals.append(signals)
+            next_state = self.getStateHash()
             agent.updateQFunctions(state, action, signals, next_state)
+        
+        return all_signals[-1]
 
     def getState(self):
         state = []
         for row in self.grid:
             state.append([cell.type for cell in row])
         return state
+    
+    def getStateHash(self):
+        state = self.getState()
+        return tuple(tuple(row) for row in state)
     
     def doAction(self, agent, action):
         signals = {}
@@ -140,4 +201,5 @@ class Environment:
                 pos[0] += 1
                 reward = 0
         self.pos[agent.name] = pos
-        signals[agent.name] = {"R": reward}
+        signals = {"R": reward}
+        return signals

@@ -7,7 +7,7 @@ class QAgent:
     def __init__(self, name="no_name"):
         self.name = name
 
-        self.qfunctions = {}  # Q-functions
+        self.Q = {}  # Q-functions
         self.preferences = []  # [a, b, c] <=> Q_a > Q_b > Q_c
 
         self.actions = []
@@ -26,13 +26,21 @@ class QAgent:
         self.actions = actions
         
     def getQValues(self, qfunction, state):
-        return self.qfunctions[qfunction].get(state, {})
+        return self.Q[qfunction].get(state, {})
+    
+    def initDecay(self, steps):
+        if self.decay_method == "linear":
+            self.epsilon_decay = self.epsilon / steps
+        elif self.decay_method == "exponential":
+            self.epsilon_decay = 0.99 ** (1 / steps)
+        else:
+            raise ValueError(f"Unknown decay method: {self.decay_method}")
 
     def setPreferences(self, preferences):
         self.preferences = preferences
         for q in preferences:
-            if q not in self.qfunctions:
-                raise ValueError(f"Q-function '{q}' does not exist. Existing Q-functions: {list(self.qfunctions.keys())}")
+            if q not in self.Q:
+                raise ValueError(f"Q-function '{q}' does not exist. Existing Q-functions: {list(self.Q.keys())}")
 
     def addQFunction(self, name):
         if name not in self.Q:
@@ -61,7 +69,7 @@ class QAgent:
     def lexicographic(self, state):
         actions = cp.deepcopy(self.actions)
         for q in self.preferences:
-            actions = self.getBestActions(self.qfunctions[q], state, actions)
+            actions = self.getBestActions(q, state, actions)
         return actions
 
     def thresholdLexicographic(self, state):
@@ -81,6 +89,9 @@ class QAgent:
                 return rd.choice(self.actions)
 
     def updateQValue(self, q, state, action, reward, next_state, optimal_action=None):
+        # Hash the state if it's a list (to use as a dict key)
+        # Flatten state and next_state if they are lists of lists, then hash as tuple
+        print(action, reward)
         qvalues = self.getQValues(q, state)
         if action not in qvalues:
             qvalues[action] = 0.0
@@ -89,6 +100,8 @@ class QAgent:
         if optimal_action is not None:
             max_next_q = max(max_next_q, self.getQValues(q, next_state).get(optimal_action, 0))
         qvalues[action] += self.alpha * (reward + self.gamma * max_next_q - qvalues[action])
+        self.Q[q][state] = qvalues
+
         if self.decay_method == "linear":
             self.epsilon -= self.epsilon_decay
         elif self.decay_method == "exponential":

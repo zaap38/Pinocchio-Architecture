@@ -79,6 +79,9 @@ class Pinocchio:
         self.stakeholders = []
         self.norms = []
 
+    def getQValues(self, qfunction, state):
+        return self.agent.getQValues(qfunction, state)
+
     def addStakeholder(self, stakeholder):
         self.stakeholders.append(stakeholder)
 
@@ -96,3 +99,8 @@ class Pinocchio:
 
     def setActions(self, actions):
         self.agent.setActions(actions)
+
+    def loadOptimalAgent(self, steps):
+        self.agent = QAgent(self.name)
+        self.agent.addQFunction("R")
+        self.agent.initDecay(steps)
