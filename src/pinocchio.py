@@ -23,6 +23,15 @@ class RegulativeNorm:
         self.context = []  # 'b', empty is tautology
         self.conclusion = []  # 'a'
 
+    def isProhibition(self):
+        return self.type == "F"
+    
+    def isPermission(self):
+        return self.type == "P"
+    
+    def isObligation(self):
+        return self.type == "O"
+
 
 class Stakeholder:
 
@@ -64,10 +73,26 @@ class Stakeholder:
 
 class Pinocchio:
 
-    def __init__(self):
-        self.agent = QAgent()
+    def __init__(self, name="no_name"):
+        self.name = name
+        self.agent = QAgent(name)
         self.stakeholders = []
         self.norms = []
 
     def addStakeholder(self, stakeholder):
         self.stakeholders.append(stakeholder)
+
+    def getAction(self, state):
+        return self.agent.getAction(state)
+    
+    def selectBestAction(self, state):
+        return self.agent.selectBestAction(state)
+                                           
+    def updateQValue(self, q, state, action, reward, next_state, optimal_action=None):
+        self.agent.updateQValue(q, state, action, reward, next_state, optimal_action)
+
+    def updateQFunctions(self, state, action, signals, next_state):
+        self.agent.updateQFunctions(state, action, signals, next_state)
+
+    def setActions(self, actions):
+        self.agent.setActions(actions)
