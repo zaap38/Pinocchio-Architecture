@@ -67,6 +67,7 @@ class Environment:
         self.steps = 1000
         self.timeout = 30  # steps
         self.loadedPreset = ""
+        self.iterations = 0  # number of steps since last reset
 
         self.historic = []
 
@@ -140,11 +141,16 @@ class Environment:
 
             # add fact functions
             adam.addFact("eat", lambda state, flags: "eat" in flags)
+            adam.addFact("longtime", lambda state, flags: state["iterations"] > 5)
 
             # constitutive norms
             c1 = ConstitutiveNorm()
             c1.premise = ["eat"]
             c1.conclusion = ["knowledge"]
+
+            c2 = ConstitutiveNorm()
+            c2.premise = ["longtime"]
+            c2.conclusion = ["hungry"]
 
             sh = []  # stakeholders
 
@@ -154,6 +160,14 @@ class Environment:
             god.afs[str(r1)] = AF()
             god.setArguments(str(r1), [str(r1)])
             sh.append(god)
+
+            user = Stakeholder("User")
+            user.addNorm(r1)
+            user.addConstitutiveNorm(r1, c2)
+            user.afs[str(r1)] = AF()
+            user.setArguments(str(r1), [str(r1), "hungry"])
+            user.setAttacks(str(r1), [("hungry", str(r1))])
+            sh.append(user)
 
             for s in sh:
                 adam.addStakeholder(s)
@@ -202,23 +216,23 @@ class Environment:
 
         start_time = time.time()
 
-        count = 0
+        self.iterations = 0
         reset = True
         i = 0
         while i < self.steps or not reset:
             i += 1
             reset = False
-            if display and count == 0:
+            if display and self.iterations == 0:
                 print("=========VVVVV=========VVVVV=========")
             log = self.step()
             logs.append(log)
             if display:
                 print(f"Step {i + 1}/{self.steps}")
                 self.display()
-            count += 1
-            if count >= self.timeout:  # reset the agent every X steps
+            self.iterations += 1
+            if self.iterations >= self.timeout:  # reset the agent every X steps
                 self.loadPreset(self.loadedPreset, reset_agent=False)
-                count = 0
+                self.iterations = 0
                 reset = True
 
         end_time = time.time()
@@ -272,23 +286,33 @@ class Environment:
     def step(self):
         all_signals = []
         all_states = []
+        all_states_dict = []
         all_actions = []
         all_next_states = []
+        all_next_states_dict = []
         all_flags = []
         all_gflags = []
 
         # sequential
         for agent in self.agents:
             state = self.getState()
+            state_dict = self.getStateDict()
             all_states.append(state)
+            all_states_dict.append(state_dict)
+            
             action = agent.getAction(state)
             all_actions.append(action)
+
             signals, flags, gflags = self.doAction(agent, action)
             all_signals.append(signals)
+
             all_flags.append(flags)
             all_gflags.append(gflags)
+
             next_state = self.getState()
+            next_state_dict = self.getStateDict()
             all_next_states.append(next_state)
+            all_next_states_dict.append(next_state_dict)
 
         # append global flags to all agents' flags
         for gflags in all_gflags:
@@ -299,11 +323,23 @@ class Environment:
 
         for i, agent in enumerate(self.agents):
             state = all_states[i]
+            state_dict = all_states_dict[i]
             next_state = all_next_states[i - 1]
-            all_signals[i]['V'] = agent.judge(next_state, all_flags[i])  # judges the consequences
+            next_state_dict = all_next_states_dict[i - 1]
+            all_signals[i]['V'] = agent.judge(next_state_dict, all_flags[i])  # judges the consequences
             agent.updateQFunctions(state, all_actions[i], all_signals[i], next_state)
         
         return all_signals[-1]
+    
+    def getStateDict(self):
+        state = {}
+        
+        state["grid"] = [[cell.type for cell in row] for row in self.grid]
+        state["pos"] = {agent.name: self.pos[agent.name] for agent in self.agents}
+        state["objects"] = {name: obj for name, obj in self.objects.items()}
+        state["iterations"] = self.iterations
+
+        return state
 
     def getState(self):
         # state of the map

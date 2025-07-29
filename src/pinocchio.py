@@ -63,9 +63,9 @@ class Stakeholder:
         self.afs = {}  # afs for each regulative norm
 
     def addNorm(self, rnorm):
-        norm_name = str(rnorm)
-        self.c_norms[norm_name] = []
-        self.afs[norm_name] = AF()
+        normName = str(rnorm)
+        self.c_norms[normName] = []
+        self.afs[normName] = AF()
 
     def addConstitutiveNorm(self, rnorm, cnorm):
         normName = str(rnorm)
@@ -92,27 +92,26 @@ class Stakeholder:
     def setAttacks(self, rnorm, attacks):
         normName = str(rnorm)
         if normName in self.afs:
-            for attacker, attacked in attacks.items():
-                for attacked_arg in attacked:
-                    self.afs[normName].addAttack(attacker, attacked_arg)
+            for attack in attacks:
+                self.afs[normName].addAttack(attack[0], attack[1])
         else:
             raise ValueError(f"Norm '{normName}' does not exist in stakeholder '{self.name}'. (In setAttacks)")
         
     def closure(self, rnorm, facts):
-        norm_name = str(rnorm)
+        normName = str(rnorm)
         factSize = len(facts)
         stop = False
         while not stop:
-            facts = self.closureStep(norm_name, facts)
+            facts = self.closureStep(normName, facts)
             if len(facts) == factSize:
                 stop = True
             factSize = len(facts)
         return facts
 
     def closureStep(self, rnorm, facts):
-        norm_name = str(rnorm)
+        normName = str(rnorm)
         new_facts = cp.deepcopy(facts)
-        for cnorm in self.c_norms[norm_name]:
+        for cnorm in self.c_norms[normName]:
             premiseInFacts = True
             for premise in cnorm.premise:
                 if premise not in facts:
@@ -123,15 +122,15 @@ class Stakeholder:
         return list(set(new_facts))
     
     def getActiveArguments(self, rnorm, facts):
-        norm_name = str(rnorm)
-        if norm_name in self.afs:
+        normName = str(rnorm)
+        if normName in self.afs:
             arguments = []
-            for arg in self.afs[norm_name].arguments:
+            for arg in self.afs[normName].arguments:
                 if arg in facts:
                     arguments.append(arg)
             return arguments
         else:
-            raise ValueError(f"Norm '{norm_name}' does not exist in stakeholder '{self.name}'. (In getArguments)")
+            raise ValueError(f"Norm '{normName}' does not exist in stakeholder '{self.name}'. (In getArguments)")
 
 
 class Pinocchio:
@@ -166,7 +165,8 @@ class Pinocchio:
                 for arg in active_args:
                     af.addArgument(arg)
                 for attack in stakeholder.afs[str(rnorm)].getAttacks():
-                    af.addAttack(attack[0], attack[1])
+                    if attack[0] in active_args and attack[1] in active_args:
+                        af.addAttack(attack[0], attack[1])
             
             # compute the extension
             extension = af.computeExtension("grounded")
@@ -183,7 +183,6 @@ class Pinocchio:
             raise ValueError(f"Fact '{fact_name}' already exists in Pinocchio '{self.name}'.")
     
     def epsilon(self, state, flags):
-        # TODO: need a dict state not the hash
         facts = []
         for fact_item in self.facts:
             if self.facts[fact_item](state, flags):

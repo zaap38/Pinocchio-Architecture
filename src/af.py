@@ -19,9 +19,10 @@ class AF:
             self.arguments.append(argument)
 
     def addAttack(self, attacker, attacked):
-        if attacker not in self.attacks:
-            self.attacks[attacker] = []
-        self.attacks[attacker].append(attacked)
+        if (attacker, attacked) in self.attacks:
+            raise ValueError(f"Attack from '{attacker}' to '{attacked}' already exists.")
+        
+        self.attacks.append((attacker, attacked))
 
         # update the attacked_by and attacking dicts
         if attacked not in self.attacked_by:
