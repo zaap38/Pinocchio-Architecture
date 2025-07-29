@@ -15,7 +15,7 @@ class QAgent:
         self.decay_method = "linear"
         self.epsilon = 1.0
         self.epsilon_decay = 0
-        self.alpha = 1#0.1
+        self.alpha = 0.1
         self.gamma = 0.9
 
         self.isRandom = False

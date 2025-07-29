@@ -11,6 +11,7 @@ WALL = 0
 ROAD = 1
 PLAIN = 2
 PACMAN = 3
+OBJECT = 4
 
 
 SYMBOLS = {
@@ -26,6 +27,7 @@ class Cell:
     def __init__(self):
         self.pos = [0, 0]  # [x, y]
         self.type = PLAIN
+        self.symbol = "?"  # only for objects
         self.labels = []
 
     def setType(self, type):
@@ -42,6 +44,11 @@ class Cell:
         if label in self.labels:
             self.labels.remove(label)
 
+    def getSymbol(self):
+        if self.type in SYMBOLS:
+            return SYMBOLS[self.type]
+        return self.symbol
+
 
 class Environment:
 
@@ -49,11 +56,16 @@ class Environment:
         self.width = 0
         self.height = 0
         self.grid = []
+        self.objects = {}
+
+        self.stochasticity = 0.1  # probability of random action
 
         self.agents = []
         self.pos = {}  # position of each agent
 
         self.steps = 1000
+        self.timeout = 30  # steps
+        self.loadedPreset = ""
 
         self.historic = []
 
@@ -82,28 +94,55 @@ class Environment:
                     elif char == SYMBOLS[PLAIN]:
                         self.grid[y][x].setType(PLAIN)
 
-    def loadPreset(self, presetName):
+    def loadPreset(self, presetName, reset_agent=True):
+        self.loadedPreset = presetName
         if presetName == "taxi":
-            self.loadTaxi()
+            self.loadTaxi(reset_agent)
         elif presetName == "pacman":
-            self.loadPacman()
+            self.loadPacman(reset_agent)
+        elif presetName == "adam":
+            self.loadAdam(reset_agent)
 
-    def loadTaxi(self):
+    def loadTaxi(self, reset_agent=True):
         pass
 
-    def loadPacman(self):
-        self.steps = 10000
-        actions = ["up", "down", "left", "right"]
-        self.loadFile("src/environments/basic_5x5.txt")
+    def loadPacman(self, reset_agent=True):
         
-        pacman = Pinocchio("Pacman")
-        pacman.loadOptimalAgent(self.steps)
-        self.agents.append(pacman)
+        if reset_agent:
+            self.steps = 10000
+            self.timeout = 20
+            self.loadFile("src/environments/basic_5x5.txt")
+            pacman = Pinocchio("Pacman")
+            pacman.loadOptimalAgent(self.steps)
+            self.agents.append(pacman)
 
+        actions = ["up", "down", "left", "right"]
         for agent in self.agents:
             agent.setActions(actions)
             # agent.isRandom = True  # comment this
             self.setPos(agent, [1, 1])  # default position
+
+    def loadAdam(self, reset_agent=True):
+
+        if reset_agent:
+            self.steps = 30000
+            self.timeout = 10
+            self.loadFile("src/environments/apple_7x7.txt")
+            adam = Pinocchio("Adam")
+            adam.loadOptimalAgent(self.steps)
+            self.agents.append(adam)
+
+        self.objects["apple"] = {}
+        self.objects["apple"]["pos"] = [3, 3]
+        self.objects["apple"]["symbol"] = "A"
+        self.objects["apple"]["flags"] = ["eat"]
+        self.objects["apple"]["reward"] = 10
+
+        actions = ["up", "down", "left", "right"]
+        for agent in self.agents:
+            agent.setActions(actions)
+            # agent.isRandom = True  # comment this
+            self.setPos(agent, [2, 2])
 
     def setSteps(self, steps):
         self.steps = steps
@@ -120,8 +159,12 @@ class Environment:
         for agent in self.agents:
             pos = self.pos[agent.name]
             cp_grid[pos[1]][pos[0]].setType(PACMAN)
+        for obj_name, obj in self.objects.items():
+            pos = obj["pos"]
+            cp_grid[pos[1]][pos[0]].setType(OBJECT)
+            cp_grid[pos[1]][pos[0]].symbol = obj["symbol"]
         for row in cp_grid:
-            print("".join(SYMBOLS[cell.type] for cell in row))
+            print("".join(cell.getSymbol() for cell in row))
 
     def run(self, display=False, run_title=""):
 
@@ -131,19 +174,31 @@ class Environment:
 
         start_time = time.time()
 
-        for i in range(self.steps):
+        count = 0
+        reset = True
+        i = 0
+        while i < self.steps or not reset:
+            i += 1
+            reset = False
+            if display and count == 0:
+                print("=========VVVVV=========VVVVV=========")
             log = self.step()
             logs.append(log)
             if display:
                 print(f"Step {i + 1}/{self.steps}")
                 self.display()
+            count += 1
+            if count >= self.timeout:  # reset the agent every X steps
+                self.loadPreset(self.loadedPreset, reset_agent=False)
+                count = 0
+                reset = True
 
         end_time = time.time()
 
         # movingAverage of the tracked Q-Functions
         evolution = {}
         qfunctions = ['R']
-        window = 20
+        window = 100
         for q in qfunctions:
             evolution[q] = self.movingAverage([log[q] for log in logs if isinstance(log, dict) and q in log], window)
 
@@ -208,15 +263,19 @@ class Environment:
         # agent positions
         agent_pos_state = tuple([pos[0] + pos[1] * self.width for pos in self.pos.values()])
 
+        # objects
+        objects_state = tuple(sorted((name, obj["pos"][0] + obj["pos"][1] * self.width)
+                                     for name, obj in self.objects.items()))
+
         # final state
-        state = [grid_state, agent_pos_state]
+        state = [grid_state, agent_pos_state, objects_state]
         return tuple(state)
 
     def doAction(self, agent, action):
         signals = {}
         pos = self.pos[agent.name]
         reward = -1
-        if rd.random() < 0.2:
+        if rd.random() < self.stochasticity:
             possible = ["up", "down", "left", "right"]
             possible.remove(action)
             action = rd.choice(possible)
@@ -237,5 +296,16 @@ class Environment:
                 pos[0] += 1
                 reward = 0
         self.pos[agent.name] = pos
+
+        flags = []
+        toRemove = []
+        for obj_name, obj in self.objects.items():
+            if obj["pos"] == pos:
+                reward += obj["reward"]
+                flags.extend(obj["flags"])
+                toRemove.append(obj_name)
+        for obj_name in toRemove:
+            del self.objects[obj_name]
+
         signals = {"R": reward}
         return signals
