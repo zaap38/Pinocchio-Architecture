@@ -15,7 +15,7 @@ class QAgent:
         self.decay_method = "linear"
         self.epsilon = 1.0
         self.epsilon_decay = 0
-        self.alpha = 0.1
+        self.alpha = 1#0.1
         self.gamma = 0.9
 
         self.isRandom = False
@@ -91,10 +91,11 @@ class QAgent:
     def updateQValue(self, q, state, action, reward, next_state, optimal_action=None):
         # Hash the state if it's a list (to use as a dict key)
         # Flatten state and next_state if they are lists of lists, then hash as tuple
-        print(action, reward)
         qvalues = self.getQValues(q, state)
         if action not in qvalues:
-            qvalues[action] = 0.0
+            #qvalues[action] = 0.0
+            for a in self.actions:
+                qvalues[a] = 0.0
         # max_next_q accounts for optimal_action if not None, else takes max
         max_next_q = max(self.getQValues(q, next_state).values(), default=0)
         if optimal_action is not None:
@@ -108,6 +109,7 @@ class QAgent:
             self.epsilon *= self.epsilon_decay
 
     def updateQFunctions(self, state, action, signals, next_state):
+        #print(signals, action)
         for q in self.preferences:
             if q not in signals:
                 raise ValueError(f"Signal '{q}' not found in signals. Available signals: {list(signals.keys())}")

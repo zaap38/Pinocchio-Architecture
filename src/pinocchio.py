@@ -104,3 +104,6 @@ class Pinocchio:
         self.agent = QAgent(self.name)
         self.agent.addQFunction("R")
         self.agent.initDecay(steps)
+
+    def setSteps(self, steps):
+        self.agent.initDecay(steps)
