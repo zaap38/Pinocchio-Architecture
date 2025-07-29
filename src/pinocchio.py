@@ -13,15 +13,20 @@ class ConstitutiveNorm:
         self.conclusion = []  # 'b'
         self.description = ""  # description of the norm
 
+    def __str__(self):
+        if not self.context:
+            return f"{self.type}({self.premise}, {self.conclusion})"
+        else:
+            return f"{self.type}({self.premise}, {self.conclusion} | {self.context})"
+
 
 class RegulativeNorm:
 
     def __init__(self):
         # X(a | b): In context 'b', it is X to do 'a'
-        self.name = "no_name"
         self.type = "F"  # F/P/O
         self.context = []  # 'b', empty is tautology
-        self.conclusion = []  # 'a'
+        self.premise = []  # 'a'
 
     def isProhibition(self):
         return self.type == "F"
@@ -31,12 +36,18 @@ class RegulativeNorm:
     
     def isObligation(self):
         return self.type == "O"
+    
+    def __str__(self):
+        if not self.context:
+            return f"{self.type}({self.premise})"
+        else:
+            return f"{self.type}({self.premise} | {self.context})"
 
 
 class Stakeholder:
 
-    def __init__(self):
-        self.name = ""
+    def __init__(self, name="no_name"):
+        self.name = name
         self.c_norms = {}
         self.afs = {}
 
@@ -44,25 +55,23 @@ class Stakeholder:
         self.c_norms[norm.name] = []
         self.afs[norm.name] = AF()
 
-    def setConstitutiveNorms(self, normName, cnorms):
-        if type(normName) == ConstitutiveNorm:
-            normName = normName.name
+    def setConstitutiveNorms(self, rnorm, cnorms):
+        normName = str(rnorm)
         if normName in self.c_norms:
-            self.c_norms[normName] = cnorms
+            self.c_norms[normName].extend(cnorms)
         else:
             raise ValueError(f"Norm '{normName}' does not exist in stakeholder '{self.name}'. (In setConstitutiveNorms)")
 
-    def setArguments(self, normName, arguments):
-        if type(normName) == RegulativeNorm:
-            normName = normName.name
+    def setArguments(self, rnorm, arguments):
+        normName = str(rnorm)
         if normName in self.afs:
-            self.afs[normName].arguments = arguments
+            for arg in arguments:
+                self.afs[normName].addArgument(arg)
         else:
             raise ValueError(f"Norm '{normName}' does not exist in stakeholder '{self.name}'. (In setArguments)")
 
-    def setAttacks(self, normName, attacks):
-        if type(normName) == RegulativeNorm:
-            normName = normName.name
+    def setAttacks(self, rnorm, attacks):
+        normName = str(rnorm)
         if normName in self.afs:
             for attacker, attacked in attacks.items():
                 for attacked_arg in attacked:
@@ -107,3 +116,7 @@ class Pinocchio:
 
     def setSteps(self, steps):
         self.agent.initDecay(steps)
+
+    def addNorm(self, norm):
+        # add regulative norm
+        self.norms.append(norm)

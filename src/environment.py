@@ -4,7 +4,7 @@ import time
 import copy as cp
 import random as rd
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt # type: ignore
 
 
 WALL = 0
@@ -130,6 +130,29 @@ class Environment:
             self.loadFile("src/environments/apple_7x7.txt")
             adam = Pinocchio("Adam")
             adam.loadOptimalAgent(self.steps)
+
+            # regulative norms
+            n1 = RegulativeNorm()
+            n1.type = "F"
+            n1.premise = ["knowledge"]
+            adam.addNorm(n1)
+
+            # constitutive norms
+            c1 = ConstitutiveNorm()
+            c1.premise = ["eat"]
+            c1.conclusion = ["knowledge"]
+
+            sh = []  # stakeholders
+
+            god = Stakeholder("God")
+            god.addNorm(n1)
+            god.addNorm(c1)
+            god.afs[str(n1)] = AF()
+            god.setArguments(str(n1))
+            sh.append(god)
+
+            for s in sh:
+                adam.addStakeholder(s)
             self.agents.append(adam)
 
         self.objects["apple"] = {}
