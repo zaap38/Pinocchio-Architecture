@@ -66,6 +66,7 @@ class AF:
             attacked_by = self.getAttackers(arg)
             if all(status[attacker] == OUT for attacker in attacked_by):
                 root_args.append(arg)
+        return root_args
 
     def groundedExtension(self):
         # Placeholder for grounded extension computation

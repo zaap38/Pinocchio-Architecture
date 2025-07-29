@@ -15,9 +15,9 @@ class ConstitutiveNorm:
 
     def __str__(self):
         if not self.context:
-            return f"{self.type}({self.premise}, {self.conclusion})"
+            return f"C({self.premise}, {self.conclusion})"
         else:
-            return f"{self.type}({self.premise}, {self.conclusion} | {self.context})"
+            return f"C({self.premise}, {self.conclusion} | {self.context})"
 
 
 class RegulativeNorm:
@@ -37,6 +37,17 @@ class RegulativeNorm:
     def isObligation(self):
         return self.type == "O"
     
+    def comply(self, facts):
+        premisesInFacts = True
+        for premise in self.premise:
+            if premise not in facts:
+                premisesInFacts = False
+                break
+        if self.isProhibition():
+            return not premisesInFacts
+        if self.isObligation():
+            return premisesInFacts
+    
     def __str__(self):
         if not self.context:
             return f"{self.type}({self.premise})"
@@ -48,12 +59,20 @@ class Stakeholder:
 
     def __init__(self, name="no_name"):
         self.name = name
-        self.c_norms = {}
-        self.afs = {}
+        self.c_norms = {}  # cnorms for each regulative norm
+        self.afs = {}  # afs for each regulative norm
 
-    def addNorm(self, norm):
-        self.c_norms[norm.name] = []
-        self.afs[norm.name] = AF()
+    def addNorm(self, rnorm):
+        norm_name = str(rnorm)
+        self.c_norms[norm_name] = []
+        self.afs[norm_name] = AF()
+
+    def addConstitutiveNorm(self, rnorm, cnorm):
+        normName = str(rnorm)
+        if normName in self.c_norms:
+            self.c_norms[normName].append(cnorm)
+        else:
+            raise ValueError(f"Norm '{normName}' does not exist in stakeholder '{self.name}'. (In addConstitutiveNorm)")
 
     def setConstitutiveNorms(self, rnorm, cnorms):
         normName = str(rnorm)
@@ -78,6 +97,41 @@ class Stakeholder:
                     self.afs[normName].addAttack(attacker, attacked_arg)
         else:
             raise ValueError(f"Norm '{normName}' does not exist in stakeholder '{self.name}'. (In setAttacks)")
+        
+    def closure(self, rnorm, facts):
+        norm_name = str(rnorm)
+        factSize = len(facts)
+        stop = False
+        while not stop:
+            facts = self.closureStep(norm_name, facts)
+            if len(facts) == factSize:
+                stop = True
+            factSize = len(facts)
+        return facts
+
+    def closureStep(self, rnorm, facts):
+        norm_name = str(rnorm)
+        new_facts = cp.deepcopy(facts)
+        for cnorm in self.c_norms[norm_name]:
+            premiseInFacts = True
+            for premise in cnorm.premise:
+                if premise not in facts:
+                    premiseInFacts = False
+                    break
+            if premiseInFacts:
+                new_facts.extend(cnorm.conclusion)
+        return list(set(new_facts))
+    
+    def getActiveArguments(self, rnorm, facts):
+        norm_name = str(rnorm)
+        if norm_name in self.afs:
+            arguments = []
+            for arg in self.afs[norm_name].arguments:
+                if arg in facts:
+                    arguments.append(arg)
+            return arguments
+        else:
+            raise ValueError(f"Norm '{norm_name}' does not exist in stakeholder '{self.name}'. (In getArguments)")
 
 
 class Pinocchio:
@@ -87,6 +141,54 @@ class Pinocchio:
         self.agent = QAgent(name)
         self.stakeholders = []
         self.norms = []
+        self.facts = {}
+
+    def judge(self, state, flags):
+        # add all rnorms to the facts
+        facts = []
+        for rnorm in self.norms:
+            facts.append(str(rnorm))
+        # apply the epsilon function to get the facts
+        facts.extend(self.epsilon(state, flags))
+        
+        # for each norm
+        # get the activate arguments, and combine the AFs of each stakeholders
+        # then judges
+        violations = {}
+        for rnorm in self.norms:
+            violations[str(rnorm)] = 0
+            af = AF()
+            all_facts = []
+            for stakeholder in self.stakeholders:
+                fact_closure = stakeholder.closure(rnorm, facts)
+                all_facts.extend(fact_closure)
+                active_args = stakeholder.getActiveArguments(rnorm, fact_closure)
+                for arg in active_args:
+                    af.addArgument(arg)
+                for attack in stakeholder.afs[str(rnorm)].getAttacks():
+                    af.addAttack(attack[0], attack[1])
+            
+            # compute the extension
+            extension = af.computeExtension("grounded")
+            # print(all_facts, extension, "Comply:", rnorm.comply(all_facts))
+            if str(rnorm) in extension and not rnorm.comply(all_facts):
+                violations[str(rnorm)] = -1
+
+        return sum(violations.values())  # return the sum of violations
+    
+    def addFact(self, fact_name, fun):
+        if fact_name not in self.facts:
+            self.facts[fact_name] = fun
+        else:
+            raise ValueError(f"Fact '{fact_name}' already exists in Pinocchio '{self.name}'.")
+    
+    def epsilon(self, state, flags):
+        # TODO: need a dict state not the hash
+        facts = []
+        for fact_item in self.facts:
+            if self.facts[fact_item](state, flags):
+                facts.append(fact_item)
+        return facts
 
     def getQValues(self, qfunction, state):
         return self.agent.getQValues(qfunction, state)

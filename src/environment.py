@@ -6,6 +6,7 @@ import random as rd
 
 import matplotlib.pyplot as plt # type: ignore
 
+from tqdm import tqdm
 
 WALL = 0
 ROAD = 1
@@ -132,10 +133,13 @@ class Environment:
             adam.loadOptimalAgent(self.steps)
 
             # regulative norms
-            n1 = RegulativeNorm()
-            n1.type = "F"
-            n1.premise = ["knowledge"]
-            adam.addNorm(n1)
+            r1 = RegulativeNorm()
+            r1.type = "F"
+            r1.premise = ["knowledge"]
+            adam.addNorm(r1)
+
+            # add fact functions
+            adam.addFact("eat", lambda state, flags: "eat" in flags)
 
             # constitutive norms
             c1 = ConstitutiveNorm()
@@ -145,10 +149,10 @@ class Environment:
             sh = []  # stakeholders
 
             god = Stakeholder("God")
-            god.addNorm(n1)
-            god.addNorm(c1)
-            god.afs[str(n1)] = AF()
-            god.setArguments(str(n1))
+            god.addNorm(r1)
+            god.addConstitutiveNorm(r1, c1)
+            god.afs[str(r1)] = AF()
+            god.setArguments(str(r1), [str(r1)])
             sh.append(god)
 
             for s in sh:
@@ -159,6 +163,7 @@ class Environment:
         self.objects["apple"]["pos"] = [3, 3]
         self.objects["apple"]["symbol"] = "A"
         self.objects["apple"]["flags"] = ["eat"]
+        self.objects["apple"]["global_flags"] = []
         self.objects["apple"]["reward"] = 10
 
         actions = ["up", "down", "left", "right"]
@@ -220,7 +225,7 @@ class Environment:
 
         # movingAverage of the tracked Q-Functions
         evolution = {}
-        qfunctions = ['R']
+        qfunctions = ['R', 'V']
         window = 100
         for q in qfunctions:
             evolution[q] = self.movingAverage([log[q] for log in logs if isinstance(log, dict) and q in log], window)
@@ -266,13 +271,37 @@ class Environment:
 
     def step(self):
         all_signals = []
+        all_states = []
+        all_actions = []
+        all_next_states = []
+        all_flags = []
+        all_gflags = []
+
+        # sequential
         for agent in self.agents:
             state = self.getState()
+            all_states.append(state)
             action = agent.getAction(state)
-            signals = self.doAction(agent, action)
+            all_actions.append(action)
+            signals, flags, gflags = self.doAction(agent, action)
             all_signals.append(signals)
+            all_flags.append(flags)
+            all_gflags.append(gflags)
             next_state = self.getState()
-            agent.updateQFunctions(state, action, signals, next_state)
+            all_next_states.append(next_state)
+
+        # append global flags to all agents' flags
+        for gflags in all_gflags:
+            for flag in gflags:
+                for i in range(len(all_flags)):
+                    if flag not in all_flags[i]:
+                        all_flags[i].append(flag)
+
+        for i, agent in enumerate(self.agents):
+            state = all_states[i]
+            next_state = all_next_states[i - 1]
+            all_signals[i]['V'] = agent.judge(next_state, all_flags[i])  # judges the consequences
+            agent.updateQFunctions(state, all_actions[i], all_signals[i], next_state)
         
         return all_signals[-1]
 
@@ -321,14 +350,16 @@ class Environment:
         self.pos[agent.name] = pos
 
         flags = []
+        global_flags = []
         toRemove = []
         for obj_name, obj in self.objects.items():
             if obj["pos"] == pos:
                 reward += obj["reward"]
                 flags.extend(obj["flags"])
+                global_flags.extend(obj["global_flags"])
                 toRemove.append(obj_name)
         for obj_name in toRemove:
             del self.objects[obj_name]
 
-        signals = {"R": reward}
-        return signals
+        signals = {"R": reward, "V": 0}
+        return signals, flags, global_flags

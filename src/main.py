@@ -9,7 +9,6 @@ if __name__ == "__main__":
     preset = "adam"
 
     env.loadPreset(preset, reset_agent=True)
-    env.display()
 
     env.run(display=False, run_title="Training")
 
