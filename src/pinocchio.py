@@ -215,6 +215,13 @@ class Pinocchio:
         self.agent.addQFunction("R")
         self.agent.initDecay(steps)
 
+    def loadNormativeAgent(self, steps):
+        self.agent = QAgent(self.name)
+        self.agent.addQFunction("V")
+        self.agent.addQFunction("R")
+        self.agent.initDecay(steps)
+        self.agent.selection_method = "dlex"
+
     def setSteps(self, steps):
         self.agent.initDecay(steps)
 

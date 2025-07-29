@@ -49,14 +49,29 @@ class QAgent:
         else:
             raise ValueError(f"Q-function '{name}' already exists.")
 
-    def getBestActions(self, qfunction, state, actions=None):
+    def getBestActions(self, qfunction, state, actions=None, tolerance=0):
         if actions is None:
             actions = cp.deepcopy(self.actions)
         qvalues = self.getQValues(qfunction, state)
         if not qvalues:
             return None
-        max_value = max(qvalues.values())
-        return [action for action, value in qvalues.items() if value == max_value]
+        max_value = max([qvalues[action] for action in actions if action in qvalues])
+        # apply tolerance
+        max_value = max_value - (tolerance / 100) * abs(max_value - min(qvalues.values()))
+        return [action for action, value in qvalues.items() if value >= max_value and action in actions]
+    
+    def getActionsAboveThreshold(self, qfunction, state, actions=None, threshold=0):
+        if actions is None:
+            actions = cp.deepcopy(self.actions)
+        qvalues = self.getQValues(qfunction, state)
+        if not qvalues:
+            return None
+        possible = [action for action, value in qvalues.items() if value >= threshold and action in actions]
+        if len(possible) > 0:
+            return possible
+        # if no actions above threshold, return the best actions
+        max_value = max([qvalues[action] for action in actions if action in qvalues])
+        return [action for action, value in qvalues.items() if value == max_value and action in actions]
 
     def selectBestAction(self, state):
         if self.selection_method == "lex":
@@ -69,14 +84,28 @@ class QAgent:
     def lexicographic(self, state):
         actions = cp.deepcopy(self.actions)
         for q in self.preferences:
+            # print(actions, end="->")
             actions = self.getBestActions(q, state, actions)
+        # print(actions)
         return actions
 
     def thresholdLexicographic(self, state):
-        NotImplementedError("Threshold-lexicographic selection method is not implemented.")
+        # TODO: doesnt seem to work for now - fix later
+        actions = cp.deepcopy(self.actions)
+        for q in self.preferences:
+            # print(actions, end="->")
+            actions = self.getActionsAboveThreshold(q, state, actions, -0.5)
+        # print(actions)
+        return actions
 
-    def deltaLexicographic(self, state):
-        NotImplementedError("Delta-lexicographic selection method is not implemented.")
+    def deltaLexicographic(self, state, tolerance=10):
+        # tolerance in percent
+        actions = cp.deepcopy(self.actions)
+        for q in self.preferences:
+            # print(actions, end="->")
+            actions = self.getBestActions(q, state, actions, tolerance)
+        # print(actions)
+        return actions
 
     def getAction(self, state):
         if rd.random() < self.epsilon or self.isRandom:
@@ -93,7 +122,6 @@ class QAgent:
         # Flatten state and next_state if they are lists of lists, then hash as tuple
         qvalues = self.getQValues(q, state)
         if action not in qvalues:
-            #qvalues[action] = 0.0
             for a in self.actions:
                 qvalues[a] = 0.0
         # max_next_q accounts for optimal_action if not None, else takes max
@@ -107,9 +135,10 @@ class QAgent:
             self.epsilon -= self.epsilon_decay
         elif self.decay_method == "exponential":
             self.epsilon *= self.epsilon_decay
+        self.epsilon = max(0, self.epsilon)
 
     def updateQFunctions(self, state, action, signals, next_state):
-        #print(signals, action)
+        # print(signals, action)
         for q in self.preferences:
             if q not in signals:
                 raise ValueError(f"Signal '{q}' not found in signals. Available signals: {list(signals.keys())}")

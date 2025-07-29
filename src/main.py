@@ -1,7 +1,10 @@
 from environment import *
+import random as rd
 
 
 if __name__ == "__main__":
+
+    rd.seed(42)
 
     env = Environment()
     # env.loadFile("src/environments/basic_5x5.txt")

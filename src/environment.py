@@ -6,8 +6,6 @@ import random as rd
 
 import matplotlib.pyplot as plt # type: ignore
 
-from tqdm import tqdm
-
 WALL = 0
 ROAD = 1
 PLAIN = 2
@@ -131,7 +129,8 @@ class Environment:
             self.timeout = 10
             self.loadFile("src/environments/apple_7x7.txt")
             adam = Pinocchio("Adam")
-            adam.loadOptimalAgent(self.steps)
+            #adam.loadOptimalAgent(self.steps)
+            adam.loadNormativeAgent(self.steps)
 
             # regulative norms
             r1 = RegulativeNorm()
@@ -333,7 +332,7 @@ class Environment:
     
     def getStateDict(self):
         state = {}
-        
+
         state["grid"] = [[cell.type for cell in row] for row in self.grid]
         state["pos"] = {agent.name: self.pos[agent.name] for agent in self.agents}
         state["objects"] = {name: obj for name, obj in self.objects.items()}
