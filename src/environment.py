@@ -69,6 +69,8 @@ class Environment:
 
         self.historic = []
 
+        self.doAction = self.doAction_1  # default action method
+
     def addAgent(self, agent):
         self.agents.append(agent)
         self.pos[agent.name] = [1, 1]  # default position, can be changed later
@@ -104,7 +106,49 @@ class Environment:
             self.loadAdam(reset_agent)
 
     def loadTaxi(self, reset_agent=True):
-        pass
+        
+        if reset_agent:
+            self.steps = 10000
+            self.timeout = 20
+            self.loadFile("src/environments/taxi_10x10.txt")
+            taxi = Pinocchio("Taxi")
+            taxi.loadOptimalAgent(self.steps)
+            self.agents.append(taxi)
+
+        movements = ["up", "down", "left", "right"]
+        speeds = ["stop", "slow", "fast"]
+        actions = []
+        for m in movements:
+            for s in speeds:
+                actions.append((m, s))
+
+        self.doAction = self.doAction_2  # change action method for taxi
+
+        self.objects["parking"] = self.makeObject()
+        self.objects["parking"]["pos"] = [4, 3]
+        self.objects["parking"]["symbol"] = "P"
+        self.objects["parking"]["flags"] = ["parked"]
+        self.objects["parking"]["reward"] = -5
+        self.objects["parking"]["inv_add"] = ["passenger"]
+
+        self.objects["street"] = self.makeObject()
+        self.objects["street"]["pos"] = [5, 3]
+        self.objects["street"]["symbol"] = "S"
+        self.objects["street"]["flags"] = ["parked"]
+        self.objects["street"]["inv_add"] = ["passenger"]
+
+        self.objects["destination"] = self.makeObject()
+        self.objects["destination"]["pos"] = [6, 3]
+        self.objects["destination"]["symbol"] = "D"
+        self.objects["destination"]["reward"] = 10
+        self.objects["destination"]["inv_rem"] = ["passenger"]
+        self.objects["destination"]["condition"] = ["passenger"]
+
+        for agent in self.agents:
+            agent.resetInventory()
+            agent.setActions(actions)
+            # agent.isRandom = True  # comment this
+            self.setPos(agent, [1, 1])
 
     def loadPacman(self, reset_agent=True):
         
@@ -118,6 +162,7 @@ class Environment:
 
         actions = ["up", "down", "left", "right"]
         for agent in self.agents:
+            agent.resetInventory()
             agent.setActions(actions)
             # agent.isRandom = True  # comment this
             self.setPos(agent, [1, 1])  # default position
@@ -172,18 +217,31 @@ class Environment:
                 adam.addStakeholder(s)
             self.agents.append(adam)
 
-        self.objects["apple"] = {}
+        self.objects["apple"] = self.makeObject()
         self.objects["apple"]["pos"] = [3, 3]
         self.objects["apple"]["symbol"] = "A"
         self.objects["apple"]["flags"] = ["eat"]
-        self.objects["apple"]["global_flags"] = []
         self.objects["apple"]["reward"] = 10
 
         actions = ["up", "down", "left", "right"]
         for agent in self.agents:
+            agent.resetInventory()
             agent.setActions(actions)
             # agent.isRandom = True  # comment this
             self.setPos(agent, [2, 2])
+
+    def makeObject(self):
+        obj = {}
+        obj["pos"] = [0, 0]
+        obj["symbol"] = "?"
+        obj["flags"] = []
+        obj["global_flags"] = []
+        obj["reward"] = 0
+        obj["permanent"] = False
+        obj["inv_add"] = []
+        obj["inv_rem"] = []
+        obj["condition"] = []
+        return obj
 
     def setSteps(self, steps):
         self.steps = steps
@@ -336,6 +394,7 @@ class Environment:
         state["grid"] = [[cell.type for cell in row] for row in self.grid]
         state["pos"] = {agent.name: self.pos[agent.name] for agent in self.agents}
         state["objects"] = {name: obj for name, obj in self.objects.items()}
+        state["inventory"] = {agent.name: agent.getInventory() for agent in self.agents}
         state["iterations"] = self.iterations
 
         return state
@@ -350,15 +409,58 @@ class Environment:
         # agent positions
         agent_pos_state = tuple([pos[0] + pos[1] * self.width for pos in self.pos.values()])
 
+        # inventory
+        agent_inventory = tuple(sorted((agent.name, tuple(agent.getInventory())) for agent in self.agents))
+
         # objects
         objects_state = tuple(sorted((name, obj["pos"][0] + obj["pos"][1] * self.width)
                                      for name, obj in self.objects.items()))
 
         # final state
-        state = [grid_state, agent_pos_state, objects_state]
+        state = [grid_state, agent_pos_state, objects_state, agent_inventory]
         return tuple(state)
 
-    def doAction(self, agent, action):
+    def processObject(self, obj_name, obj, agent):
+        reward = 0
+        flags = []
+        global_flags = []
+        inventory = agent.getInventory()
+        toRemove = []
+
+        for item in obj["condition"]:
+            if item not in inventory:
+                return 0, [], [], []
+        
+        agent.addItemsToInventory(obj["inv_add"])
+        agent.removeItemsFromInventory(obj["inv_rem"])
+        reward += obj["reward"]
+        flags.extend(obj["flags"])
+        global_flags.extend(obj["global_flags"])
+        if not obj["permanent"]:
+            toRemove.append(obj_name)
+
+        return reward, flags, global_flags, toRemove
+    
+    def handleObjectsOnPosition(self, agent):
+        reward = 0
+        flags = []
+        global_flags = []
+        toRemove = []
+        pos = self.pos[agent.name]
+
+        for obj_name, obj in self.objects.items():
+            if obj["pos"] == pos:
+                reward_p, flags_p, global_flags_p, toRemove_p = self.processObject(obj_name, obj, agent)
+                reward += reward_p
+                flags.extend(flags_p)
+                global_flags.extend(global_flags_p)
+                toRemove.extend(toRemove_p)
+        for obj_name in toRemove:
+            del self.objects[obj_name]
+
+        return reward, flags, global_flags
+
+    def doAction_1(self, agent, action):
         signals = {}
         pos = self.pos[agent.name]
         reward = -1
@@ -384,17 +486,48 @@ class Environment:
                 reward = 0
         self.pos[agent.name] = pos
 
-        flags = []
-        global_flags = []
-        toRemove = []
-        for obj_name, obj in self.objects.items():
-            if obj["pos"] == pos:
-                reward += obj["reward"]
-                flags.extend(obj["flags"])
-                global_flags.extend(obj["global_flags"])
-                toRemove.append(obj_name)
-        for obj_name in toRemove:
-            del self.objects[obj_name]
+        reward_handle, flags, global_flags = self.handleObjectsOnPosition(agent)
+        reward += reward_handle
+
+        signals = {"R": reward, "V": 0}
+        return signals, flags, global_flags
+    
+    def doAction_2(self, agent, action):
+        signals = {}
+        pos = self.pos[agent.name]
+        reward = 0
+        movement = action[0]
+        speed = action[1]
+
+        if speed == "fast":
+            reward -= 0.5
+        elif speed in ["slow", "stop"]:
+            reward -= 1
+        
+        if speed != "stop":
+            if movement == "up":
+                if pos[1] > 0 and self.grid[pos[1] - 1][pos[0]].type != WALL:
+                    pos[1] -= 1
+                    reward = 0
+            elif movement == "down":
+                if pos[1] < self.height - 1 and self.grid[pos[1] + 1][pos[0]].type != WALL:
+                    pos[1] += 1
+                    reward = 0
+            elif movement == "left":
+                if pos[0] > 0 and self.grid[pos[1]][pos[0] - 1].type != WALL:
+                    pos[0] -= 1
+                    reward = 0
+            elif movement == "right":
+                if pos[0] < self.width - 1 and self.grid[pos[1]][pos[0] + 1].type != WALL:
+                    pos[0] += 1
+                    reward = 0
+            else:
+                reward -= 10  # hit a wall
+
+        self.pos[agent.name] = pos
+
+        reward_handle, flags, global_flags = self.handleObjectsOnPosition(agent)
+        reward += reward_handle
 
         signals = {"R": reward, "V": 0}
         return signals, flags, global_flags

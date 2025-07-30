@@ -9,7 +9,7 @@ if __name__ == "__main__":
     env = Environment()
     # env.loadFile("src/environments/basic_5x5.txt")
 
-    preset = "adam"
+    preset = "taxi"
 
     env.loadPreset(preset, reset_agent=True)
 

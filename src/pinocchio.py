@@ -228,3 +228,23 @@ class Pinocchio:
     def addNorm(self, norm):
         # add regulative norm
         self.norms.append(norm)
+
+    def getInventory(self):
+        return self.agent.getInventory()
+    
+    def addItemToInventory(self, item):
+        self.agent.addItemToInventory(item)
+
+    def removeItemFromInventory(self, item):
+        self.agent.removeItemFromInventory(item)
+
+    def addItemsToInventory(self, items):
+        for item in items:
+            self.addItemToInventory(item)
+
+    def removeItemsFromInventory(self, items):
+        for item in items:
+            self.removeItemFromInventory(item)
+
+    def resetInventory(self):
+        self.agent.resetInventory()

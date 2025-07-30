@@ -11,6 +11,7 @@ class QAgent:
         self.preferences = []  # [a, b, c] <=> Q_a > Q_b > Q_c
 
         self.actions = []
+        self.inventory = []
 
         self.decay_method = "linear"
         self.epsilon = 1.0
@@ -24,6 +25,20 @@ class QAgent:
 
     def setActions(self, actions):
         self.actions = actions
+
+    def getInventory(self):
+        return self.inventory
+    
+    def addItemToInventory(self, item):
+        if item not in self.inventory:
+            self.inventory.append(item)
+
+    def removeItemFromInventory(self, item):
+        if item in self.inventory:
+            self.inventory.remove(item)
+
+    def resetInventory(self):
+        self.inventory = []
         
     def getQValues(self, qfunction, state):
         return self.Q[qfunction].get(state, {})
