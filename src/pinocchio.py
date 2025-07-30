@@ -6,11 +6,19 @@ from af import *
 
 class ConstitutiveNorm:
 
-    def __init__(self):
+    def __init__(self, prem=[], conc=[], context=[]):
         # C(a, b | c): In context 'c', 'a' counts as 'b'
-        self.context = []  # 'c', empty is tautology
-        self.premise = []  # 'a'
-        self.conclusion = []  # 'b'
+
+        if type(prem) is str:
+            prem = [prem]
+        if type(conc) is str:
+            conc = [conc]
+        if type(context) is str:
+            context = [context]
+
+        self.context = context  # 'c', empty is tautology
+        self.premise = prem  # 'a'
+        self.conclusion = conc  # 'b'
         self.description = ""  # description of the norm
 
     def __str__(self):
@@ -22,11 +30,17 @@ class ConstitutiveNorm:
 
 class RegulativeNorm:
 
-    def __init__(self):
+    def __init__(self, t='F', prem=[], context=[]):
         # X(a | b): In context 'b', it is X to do 'a'
-        self.type = "F"  # F/P/O
-        self.context = []  # 'b', empty is tautology
-        self.premise = []  # 'a'
+
+        if type(prem) is str:
+            prem = [prem]
+        if type(context) is str:
+            context = [context]
+
+        self.type = t  # F/P/O
+        self.context = context  # 'b', empty is tautology
+        self.premise = prem  # 'a'
 
     def isProhibition(self):
         return self.type == "F"
@@ -149,7 +163,6 @@ class Pinocchio:
             facts.append(str(rnorm))
         # apply the epsilon function to get the facts
         facts.extend(self.epsilon(state, flags))
-        
         # for each norm
         # get the activate arguments, and combine the AFs of each stakeholders
         # then judges
@@ -158,15 +171,22 @@ class Pinocchio:
             violations[str(rnorm)] = 0
             af = AF()
             all_facts = []
+            all_attacks = []
+            all_active = []
             for stakeholder in self.stakeholders:
                 fact_closure = stakeholder.closure(rnorm, facts)
                 all_facts.extend(fact_closure)
                 active_args = stakeholder.getActiveArguments(rnorm, fact_closure)
                 for arg in active_args:
                     af.addArgument(arg)
+                    if arg not in all_active:
+                        all_active.append(arg)
                 for attack in stakeholder.afs[str(rnorm)].getAttacks():
-                    if attack[0] in active_args and attack[1] in active_args:
-                        af.addAttack(attack[0], attack[1])
+                    if attack not in all_attacks:
+                        all_attacks.append(attack)
+            for attack in all_attacks:
+                if attack[0] in all_active and attack[1] in all_active:
+                    af.addAttack(attack)
             
             # compute the extension
             extension = af.computeExtension("grounded")

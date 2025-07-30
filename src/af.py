@@ -5,7 +5,6 @@ IN = 1
 OUT = 2
 
 
-
 class AF:
 
     def __init__(self):
@@ -18,16 +17,20 @@ class AF:
         if argument not in self.arguments:
             self.arguments.append(argument)
 
-    def addAttack(self, attacker, attacked):
+    def addAttack(self, attacker, attacked=None):
+        if attacked is None:
+            attacked = attacker[1]
+            attacker = attacker[0]
+
         if (attacker, attacked) in self.attacks:
             raise ValueError(f"Attack from '{attacker}' to '{attacked}' already exists.")
         
         self.attacks.append((attacker, attacked))
 
         # update the attacked_by and attacking dicts
-        if attacked not in self.attacked_by:
-            self.attacked_by[attacked] = []
-        self.attacked_by[attacked].append(attacker)
+        if attacker not in self.attacked_by:
+            self.attacked_by[attacker] = []
+        self.attacked_by[attacker].append(attacked)
 
         if attacked not in self.attacking:
             self.attacking[attacked] = []
@@ -36,16 +39,16 @@ class AF:
     def getAttacks(self):
         return self.attacks
     
-    def getAttackers(self, arg):
+    def getInAttack(self, arg):
         # arguments attacking arg
-        if arg in self.attacked_by:
-            return self.attacked_by[arg]
-        return []
-    
-    def getAttackedBy(self, arg):
-        # arguments attacked by arg
         if arg in self.attacking:
             return self.attacking[arg]
+        return []
+    
+    def getOutAttack(self, arg):
+        # arguments attacked by arg
+        if arg in self.attacked_by:
+            return self.attacked_by[arg]
         return []
     
     def computeExtension(self, extension):
@@ -64,7 +67,7 @@ class AF:
         for arg in self.arguments:
             if status[arg] != UNDEC:
                 continue
-            attacked_by = self.getAttackers(arg)
+            attacked_by = self.getInAttack(arg)
             if all(status[attacker] == OUT for attacker in attacked_by):
                 root_args.append(arg)
         return root_args
@@ -79,7 +82,7 @@ class AF:
         while len(roots) > 0:
             for arg in roots:
                 status[arg] = IN
-                for attacked in self.getAttackedBy(arg):
+                for attacked in self.getOutAttack(arg):
                     status[attacked] = OUT
             roots = self.getRootArguments(status)
 
@@ -88,3 +91,23 @@ class AF:
     def preferredExtension(self):
         # Placeholder for preferred extension computation
         return []
+    
+    def getStatus(self, value):
+        if value == IN:
+            return "IN"
+        elif value == OUT:
+            return "OUT"
+        elif value == UNDEC:
+            return "UNDEC"
+        else:
+            raise ValueError(f"Unknown status value: {value}")
+    
+    def printArgs(self, status=None):
+        if status is None:
+            print("Arguments:", self.arguments)
+        else:
+            print([(arg, self.getStatus(status[arg])) for arg in self.arguments])
+
+    def print(self):
+        print("Arguments:", self.arguments)
+        print("Attacks:", self.attacks)
