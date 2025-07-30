@@ -248,3 +248,9 @@ class Pinocchio:
 
     def resetInventory(self):
         self.agent.resetInventory()
+
+    def getLastAction(self):
+        return self.agent.getLastAction()
+    
+    def setLastAction(self, action):
+        self.agent.setLastAction(action)

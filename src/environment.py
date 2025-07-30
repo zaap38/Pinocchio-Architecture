@@ -106,10 +106,12 @@ class Environment:
             self.loadAdam(reset_agent)
 
     def loadTaxi(self, reset_agent=True):
+
+        self.window = 10000
         
         if reset_agent:
-            self.steps = 10000
-            self.timeout = 20
+            self.steps = 400000
+            self.timeout = 50
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
             taxi.loadOptimalAgent(self.steps)
@@ -125,22 +127,22 @@ class Environment:
         self.doAction = self.doAction_2  # change action method for taxi
 
         self.objects["parking"] = self.makeObject()
-        self.objects["parking"]["pos"] = [4, 3]
+        self.objects["parking"]["pos"] = [7, 3]
         self.objects["parking"]["symbol"] = "P"
         self.objects["parking"]["flags"] = ["parked"]
         self.objects["parking"]["reward"] = -5
         self.objects["parking"]["inv_add"] = ["passenger"]
 
         self.objects["street"] = self.makeObject()
-        self.objects["street"]["pos"] = [5, 3]
+        self.objects["street"]["pos"] = [3, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["parked"]
         self.objects["street"]["inv_add"] = ["passenger"]
 
         self.objects["destination"] = self.makeObject()
-        self.objects["destination"]["pos"] = [6, 3]
+        self.objects["destination"]["pos"] = [8, 6]
         self.objects["destination"]["symbol"] = "D"
-        self.objects["destination"]["reward"] = 10
+        self.objects["destination"]["reward"] = 100
         self.objects["destination"]["inv_rem"] = ["passenger"]
         self.objects["destination"]["condition"] = ["passenger"]
 
@@ -151,6 +153,8 @@ class Environment:
             self.setPos(agent, [1, 1])
 
     def loadPacman(self, reset_agent=True):
+
+        self.window = 50
         
         if reset_agent:
             self.steps = 10000
@@ -168,6 +172,8 @@ class Environment:
             self.setPos(agent, [1, 1])  # default position
 
     def loadAdam(self, reset_agent=True):
+
+        self.window = 200
 
         if reset_agent:
             self.steps = 30000
@@ -284,7 +290,9 @@ class Environment:
             log = self.step()
             logs.append(log)
             if display:
-                print(f"Step {i + 1}/{self.steps}")
+                print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
+                for agent in self.agents:
+                    print(f"{agent.name}: {agent.getLastAction()}   Inv: {agent.getInventory()}")
                 self.display()
             self.iterations += 1
             if self.iterations >= self.timeout:  # reset the agent every X steps
@@ -297,7 +305,7 @@ class Environment:
         # movingAverage of the tracked Q-Functions
         evolution = {}
         qfunctions = ['R', 'V']
-        window = 100
+        window = self.window
         for q in qfunctions:
             evolution[q] = self.movingAverage([log[q] for log in logs if isinstance(log, dict) and q in log], window)
 
@@ -358,6 +366,7 @@ class Environment:
             all_states_dict.append(state_dict)
             
             action = agent.getAction(state)
+            agent.setLastAction(action)
             all_actions.append(action)
 
             signals, flags, gflags = self.doAction(agent, action)

@@ -23,6 +23,14 @@ class QAgent:
 
         self.selection_method = "lex"
 
+        self.lastAction = None
+
+    def getLastAction(self):
+        return self.lastAction
+    
+    def setLastAction(self, action):
+        self.lastAction = action
+
     def setActions(self, actions):
         self.actions = actions
 
