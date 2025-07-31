@@ -4,7 +4,7 @@
 def parking_close(state, flags):
     if "parked" in flags:
         return False
-    dist = 2
+    dist = 4
     dist_to_parking = 10000
     if "parking" in state["objects"]:
         dist_to_parking = abs(state["pos"]["Taxi"][0] - state["objects"]["parking"]["pos"][0]) + \

@@ -246,10 +246,10 @@ class Environment:
 
     def loadTaxi(self, reset_agent=True):
 
-        self.window = 10000
+        self.window = 600
         
         if reset_agent:
-            self.steps = 200000
+            self.steps = 1000000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
@@ -273,13 +273,13 @@ class Environment:
             ct4 = ConstitutiveNorm("evening", "late")
             ct5 = ConstitutiveNorm("no_traffic", "no_traffic")
             ct6 = ConstitutiveNorm("time_0-10", "morning")
-            ct7 = ConstitutiveNorm("time_11-20", "morning")
+            ct7 = ConstitutiveNorm("time_11-20", "day")
             ct8 = ConstitutiveNorm("time_31-40", "evening")
             ct9 = ConstitutiveNorm("time_41-50", "night")
             ct10 = ConstitutiveNorm("time_51-60", "night")
 
             # c norms Law
-            cl1 = ConstitutiveNorm("dist_parking_<_2", "parking_near")
+            cl1 = ConstitutiveNorm("dist_parking_<_4", "parking_near")
             cl2 = ConstitutiveNorm("in_city", "no_exception")
 
             # facts
@@ -297,8 +297,8 @@ class Environment:
             taxi.addFact("time_31-40", lambda state, flags: 30 < state["iterations"] <= 40)
             taxi.addFact("time_41-50", lambda state, flags: 40 < state["iterations"] <= 50)
             taxi.addFact("time_51-60", lambda state, flags: 50 < state["iterations"])
-            taxi.addFact("dist_parking_<_2", funfacts.parking_close)
-            taxi.addFact("in_city", lambda state, flags: True)
+            taxi.addFact("dist_parking_<_4", funfacts.parking_close)
+            # taxi.addFact("in_city", lambda state, flags: True)
 
             attacks_r1 = []
             attacks_r2 = [("late", str(r2)), ("no_traffic", str(r2)), ("no_exception", "late"), ("no_exception", "no_traffic")]
@@ -358,19 +358,20 @@ class Environment:
         self.objects["parking"]["flags"] = ["parked", "pick"]
         self.objects["parking"]["reward"] = -5
         self.objects["parking"]["inv_add"] = ["passenger"]
-        self.objects["parking"]["condition"] = ["not-passenger"]
+        self.objects["parking"]["condition"] = ["not-passenger", "not-dropped"]
 
         self.objects["street"] = self.makeObject()
         self.objects["street"]["pos"] = [5, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["pick"]
         self.objects["street"]["inv_add"] = ["passenger"]
-        self.objects["street"]["condition"] = ["not-passenger"]
+        self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
 
         self.objects["destination"] = self.makeObject()
-        self.objects["destination"]["pos"] = [8, 6]
+        self.objects["destination"]["pos"] = [6, 8]
         self.objects["destination"]["symbol"] = "D"
         self.objects["destination"]["reward"] = 100
+        self.objects["destination"]["inv_add"] = ["dropped"]
         self.objects["destination"]["inv_rem"] = ["passenger"]
         self.objects["destination"]["condition"] = ["passenger"]
         self.objects["destination"]["flags"] = ["drop"]
@@ -379,7 +380,8 @@ class Environment:
             agent.resetInventory()
             agent.setActions(actions)
             # agent.isRandom = True  # comment this
-            self.setPos(agent, [1, 1])
+            #self.setPos(agent, [1, 1])
+            self.setPos(agent, [rd.randint(1, self.width - 2), rd.randint(1, self.height - 2)])  # default position
 
     def loadPacman(self, reset_agent=True):
 
@@ -521,11 +523,7 @@ class Environment:
                 print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
                 for agent in self.agents:
                     print(f"{agent.name}: Action={agent.getLastAction()}  Signal={agent.getLastSignal()}  Inv: {agent.getInventory()}")
-                print("Daytime:", self.getState()[-1])
                 self.display()
-                for agent in self.agents:
-                    # print(f" Signals: {log['R']}, V: {log['V']}")
-                    pass
             self.iterations += 1
             if self.iterations >= self.timeout:  # reset the agent every X steps
                 self.loadPreset(self.loadedPreset, reset_agent=False)
@@ -647,16 +645,6 @@ class Environment:
         state["inventory"] = {agent.name: agent.getInventory() for agent in self.agents}
         state["iterations"] = self.iterations
         state["actions"] = {agent.name: agent.getLastAction() for agent in self.agents}
-        
-        daytime = "morning"
-        if self.iterations > 10:
-            daytime = "day"
-        if self.iterations > 15:
-            daytime = "evening"
-        if self.iterations > 20:
-            daytime = "night"
-
-        state["daytime"] = daytime
 
         return state
 
@@ -677,17 +665,11 @@ class Environment:
         objects_state = tuple(sorted((name, obj["pos"][0] + obj["pos"][1] * self.width)
                                      for name, obj in self.objects.items()))
         
-        # time of the day
-        daytime = "morning"
-        if self.iterations > 10:
-            daytime = "day"
-        if self.iterations > 15:
-            daytime = "evening"
-        if self.iterations > 20:
-            daytime = "night"
+        # iteration
+        iteration_state = self.iterations // 6
 
         # final state
-        state = [grid_state, agent_pos_state, objects_state, agent_inventory, daytime]
+        state = [grid_state, agent_pos_state, objects_state, agent_inventory, iteration_state]
         return tuple(state)
     
     def getCondition(self, condition):

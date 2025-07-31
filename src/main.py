@@ -19,7 +19,7 @@ if __name__ == "__main__":
     env.setDebug(False)
     env.run(display=False, run_title="Training")
 
-    env.setSteps(200)
+    env.setSteps(2000)
     env.loadPreset(preset, reset_agent=False)
     env.setDebug(False)
     env.run(display=True, run_title="Testing")

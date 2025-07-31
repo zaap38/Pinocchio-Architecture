@@ -42,6 +42,8 @@ class RegulativeNorm:
         self.context = context  # 'b', empty is tautology
         self.premise = prem  # 'a'
 
+        self.weight = 1.0
+
     def isProhibition(self):
         return self.type == "F"
     
@@ -199,13 +201,13 @@ class Pinocchio:
             didViolation = False
             # print(all_facts, extension, "Comply:", rnorm.comply(all_facts))
             if str(rnorm) in extension and not rnorm.comply(all_facts):
-                violations[str(rnorm)] = -1
+                violations[str(rnorm)] = -rnorm.weight
                 didViolation = True
             if debug:
                 print("Violates", str(rnorm), ":", didViolation)
                 print("Extension:", extension)
 
-        return sum(violations.values())  # return the sum of violations
+        return sum(violations.values())  # return the sum of violated norms' weights
     
     def addFact(self, fact_name, fun):
         if fact_name not in self.facts:
