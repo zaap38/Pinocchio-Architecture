@@ -117,10 +117,10 @@ class Environment:
 
     def loadMiniTaxi(self, reset_agent=True):
 
-        self.window = 25
+        self.window = 40
         
         if reset_agent:
-            self.steps = 10000
+            self.steps = 40000
             self.timeout = 40
             self.loadFile("src/environments/taxi_5x5.txt")
             taxi = Pinocchio("Taxi")
@@ -133,8 +133,8 @@ class Environment:
             r2 = RegulativeNorm("F", "speeding")
             r3 = RegulativeNorm("F", "stop", "road")
 
-            # taxi.addNorm(r1)
-            # taxi.addNorm(r2)
+            taxi.addNorm(r1)
+            taxi.addNorm(r2)
             taxi.addNorm(r3)
 
             # c norms Taxi
@@ -155,7 +155,7 @@ class Environment:
             taxi.addFact("speeding", lambda state, flags: state["actions"].get(taxi.name)[1] == "fast")
             taxi.addFact("stop", lambda state, flags: "pick" in flags or "drop" in flags)
             taxi.addFact("role(taxi)", lambda state, flags: True)
-            #taxi.addFact("not_service", lambda state, flags: 10 < state["iterations"] or state["iterations"] > 30)
+            # taxi.addFact("not_service", lambda state, flags: 10 < state["iterations"] or state["iterations"] > 30)
             taxi.addFact("distance_>_time", lambda state, flags: "passenger" in state["inventory"][taxi.name] and \
                          state["iterations"] > 12)
             taxi.addFact("no_traffic", lambda state, flags: len(state["pos"]) < 3)
@@ -168,37 +168,37 @@ class Environment:
 
             # stakeholders
             taxi_sh = Stakeholder("Taxi")
-            # taxi_sh.addNorm(r1)
-            # taxi_sh.addNorm(r2)
+            taxi_sh.addNorm(r1)
+            taxi_sh.addNorm(r2)
             taxi_sh.addNorm(r3)
-            # taxi_sh.addConstitutiveNorm(r2, ct3)
-            # taxi_sh.addConstitutiveNorm(r2, ct4)
+            taxi_sh.addConstitutiveNorm(r2, ct3)
+            taxi_sh.addConstitutiveNorm(r2, ct4)
             taxi_sh.addConstitutiveNorm(r3, ct1)
             taxi_sh.addConstitutiveNorm(r3, ct2)
 
-            # taxi_sh.afs[str(r1)] = AF()
-            # taxi_sh.afs[str(r2)] = AF()
+            taxi_sh.afs[str(r1)] = AF()
+            taxi_sh.afs[str(r2)] = AF()
             taxi_sh.afs[str(r3)] = AF()
 
-            # taxi_sh.setArguments(str(r1), [str(r1)])
-            # taxi_sh.setArguments(str(r2), [str(r2), "no_traffic", "late"])
-            # taxi_sh.setAttacks(str(r2), attacks_r2)
+            taxi_sh.setArguments(str(r1), [str(r1)])
+            taxi_sh.setArguments(str(r2), [str(r2), "no_traffic", "late"])
+            taxi_sh.setAttacks(str(r2), attacks_r2)
             taxi_sh.setArguments(str(r3), [str(r3), "not_service", "role(taxi)"])
             taxi_sh.setAttacks(str(r3), attacks_r3)
 
             law = Stakeholder("Law")
-            # law.addNorm(r1)
-            # law.addNorm(r2)
+            law.addNorm(r1)
+            law.addNorm(r2)
             law.addNorm(r3)
-            # law.addConstitutiveNorm(r2, cl2)
+            law.addConstitutiveNorm(r2, cl2)
             law.addConstitutiveNorm(r3, cl1)
 
-            # law.afs[str(r1)] = AF()
-            # law.afs[str(r2)] = AF()
+            law.afs[str(r1)] = AF()
+            law.afs[str(r2)] = AF()
             law.afs[str(r3)] = AF()
-            # law.setArguments(str(r1), [str(r1)])
-            # law.setArguments(str(r2), [str(r2), "no_exception"])
-            # law.setAttacks(str(r2), attacks_r2)
+            law.setArguments(str(r1), [str(r1)])
+            law.setArguments(str(r2), [str(r2), "no_exception"])
+            law.setAttacks(str(r2), attacks_r2)
             law.setArguments(str(r3), [str(r3), "parking_near"])
             law.setAttacks(str(r3), attacks_r3)
 
@@ -206,8 +206,8 @@ class Environment:
             taxi.addStakeholder(law)
 
         movements = ["up", "down", "left", "right"]
-        # speeds = ["slow", "fast"]
-        speeds = ["slow"]
+        speeds = ["slow", "fast"]
+        # speeds = ["slow"]
         actions = []
         for m in movements:
             for s in speeds:
