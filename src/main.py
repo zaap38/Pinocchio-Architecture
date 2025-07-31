@@ -8,7 +8,11 @@ if __name__ == "__main__":
 
     env = Environment()
 
-    preset = "mini_taxi"#"taxi"
+    # pacman
+    # adam
+    # mini_taxi
+    # taxi
+    preset = "taxi"
 
     env.loadPreset(preset, reset_agent=True)
 

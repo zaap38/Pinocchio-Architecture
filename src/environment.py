@@ -120,8 +120,8 @@ class Environment:
         self.window = 40
         
         if reset_agent:
-            self.steps = 40000
-            self.timeout = 40
+            self.steps = 20000
+            self.timeout = 30
             self.loadFile("src/environments/taxi_5x5.txt")
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
@@ -155,12 +155,12 @@ class Environment:
             taxi.addFact("speeding", lambda state, flags: state["actions"].get(taxi.name)[1] == "fast")
             taxi.addFact("stop", lambda state, flags: "pick" in flags or "drop" in flags)
             taxi.addFact("role(taxi)", lambda state, flags: True)
-            # taxi.addFact("not_service", lambda state, flags: 10 < state["iterations"] or state["iterations"] > 30)
+            taxi.addFact("not_service", lambda state, flags: state["daytime"] in ["morning", "night"])
             taxi.addFact("distance_>_time", lambda state, flags: "passenger" in state["inventory"][taxi.name] and \
-                         state["iterations"] > 12)
-            taxi.addFact("no_traffic", lambda state, flags: len(state["pos"]) < 3)
+                         state["daytime"] == "evening")
+            # taxi.addFact("no_traffic", lambda state, flags: len(state["pos"]) < 3)
             taxi.addFact("dist_parking_<_2", funfacts.parking_close)
-            taxi.addFact("in_city", lambda state, flags: True)
+            # taxi.addFact("in_city", lambda state, flags: True)
 
             attacks_r1 = []
             attacks_r2 = [("late", str(r2)), ("no_traffic", str(r2)), ("no_exception", "late"), ("no_exception", "no_traffic")]
@@ -249,8 +249,8 @@ class Environment:
         self.window = 10000
         
         if reset_agent:
-            self.steps = 1000#1600000
-            self.timeout = 80
+            self.steps = 200000
+            self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
@@ -268,9 +268,15 @@ class Environment:
 
             # c norms Taxi
             ct1 = ConstitutiveNorm("role(taxi)")
-            ct2 = ConstitutiveNorm("not_service", "not_service")
-            ct3 = ConstitutiveNorm("distance_>_time", "late")
-            ct4 = ConstitutiveNorm("no_traffic", "no_traffic")
+            ct2 = ConstitutiveNorm("morning", "not_service")
+            ct3 = ConstitutiveNorm("evening", "not_service")
+            ct4 = ConstitutiveNorm("evening", "late")
+            ct5 = ConstitutiveNorm("no_traffic", "no_traffic")
+            ct6 = ConstitutiveNorm("time_0-10", "morning")
+            ct7 = ConstitutiveNorm("time_11-20", "morning")
+            ct8 = ConstitutiveNorm("time_31-40", "evening")
+            ct9 = ConstitutiveNorm("time_41-50", "night")
+            ct10 = ConstitutiveNorm("time_51-60", "night")
 
             # c norms Law
             cl1 = ConstitutiveNorm("dist_parking_<_2", "parking_near")
@@ -284,11 +290,14 @@ class Environment:
             taxi.addFact("speeding", lambda state, flags: state["actions"].get(taxi.name)[1] == "fast")
             taxi.addFact("stop", lambda state, flags: "pick" in flags or "drop" in flags)
             taxi.addFact("role(taxi)", lambda state, flags: True)
-            taxi.addFact("not_service", lambda state, flags: 10 < state["iterations"] or state["iterations"] > 50)
-            taxi.addFact("distance_>_time", lambda state, flags: "passenger" in state["inventory"][taxi.name] and \
-                         state["iterations"] > 20)
-            taxi.addFact("no_traffic", lambda state, flags: len(state["pos"]) < 3)
-            taxi.addFact("dist_parking_<_2", self.parking_close)
+            taxi.addFact("passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
+            taxi.addFact("time_0-10", lambda state, flags: state["iterations"] <= 10)
+            taxi.addFact("time_11-20", lambda state, flags: 10 < state["iterations"] <= 20)
+            taxi.addFact("time_21-30", lambda state, flags: 20 < state["iterations"] <= 30)
+            taxi.addFact("time_31-40", lambda state, flags: 30 < state["iterations"] <= 40)
+            taxi.addFact("time_41-50", lambda state, flags: 40 < state["iterations"] <= 50)
+            taxi.addFact("time_51-60", lambda state, flags: 50 < state["iterations"])
+            taxi.addFact("dist_parking_<_2", funfacts.parking_close)
             taxi.addFact("in_city", lambda state, flags: True)
 
             attacks_r1 = []
@@ -352,7 +361,7 @@ class Environment:
         self.objects["parking"]["condition"] = ["not-passenger"]
 
         self.objects["street"] = self.makeObject()
-        self.objects["street"]["pos"] = [3, 3]
+        self.objects["street"]["pos"] = [5, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["pick"]
         self.objects["street"]["inv_add"] = ["passenger"]
@@ -512,6 +521,7 @@ class Environment:
                 print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
                 for agent in self.agents:
                     print(f"{agent.name}: Action={agent.getLastAction()}  Signal={agent.getLastSignal()}  Inv: {agent.getInventory()}")
+                print("Daytime:", self.getState()[-1])
                 self.display()
                 for agent in self.agents:
                     # print(f" Signals: {log['R']}, V: {log['V']}")
@@ -637,6 +647,16 @@ class Environment:
         state["inventory"] = {agent.name: agent.getInventory() for agent in self.agents}
         state["iterations"] = self.iterations
         state["actions"] = {agent.name: agent.getLastAction() for agent in self.agents}
+        
+        daytime = "morning"
+        if self.iterations > 10:
+            daytime = "day"
+        if self.iterations > 15:
+            daytime = "evening"
+        if self.iterations > 20:
+            daytime = "night"
+
+        state["daytime"] = daytime
 
         return state
 
@@ -656,9 +676,18 @@ class Environment:
         # objects
         objects_state = tuple(sorted((name, obj["pos"][0] + obj["pos"][1] * self.width)
                                      for name, obj in self.objects.items()))
+        
+        # time of the day
+        daytime = "morning"
+        if self.iterations > 10:
+            daytime = "day"
+        if self.iterations > 15:
+            daytime = "evening"
+        if self.iterations > 20:
+            daytime = "night"
 
         # final state
-        state = [grid_state, agent_pos_state, objects_state, agent_inventory]
+        state = [grid_state, agent_pos_state, objects_state, agent_inventory, daytime]
         return tuple(state)
     
     def getCondition(self, condition):
