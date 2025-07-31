@@ -156,14 +156,20 @@ class Pinocchio:
         self.norms = []
         self.facts = {}
 
-    def judge(self, state, flags):
+    def judge(self, state, flags, debug=False):
         # add all rnorms to the facts
         facts = []
         for rnorm in self.norms:
             facts.append(str(rnorm))
         # apply the epsilon function to get the facts
         facts.extend(self.epsilon(state, flags))
-        # for each norm
+        if debug:
+            print("JUDGES", self.name, id(self.agent))
+            print("Inv.:", self.getInventory())
+            print("Last action:", self.getLastAction())
+            print("Brute:", flags)
+            print("Inst.:", facts)
+            # for each norm
         # get the activate arguments, and combine the AFs of each stakeholders
         # then judges
         violations = {}
@@ -190,9 +196,14 @@ class Pinocchio:
             
             # compute the extension
             extension = af.computeExtension("grounded")
+            didViolation = False
             # print(all_facts, extension, "Comply:", rnorm.comply(all_facts))
             if str(rnorm) in extension and not rnorm.comply(all_facts):
                 violations[str(rnorm)] = -1
+                didViolation = True
+            if debug:
+                print("Violates", str(rnorm), ":", didViolation)
+                print("Extension:", extension)
 
         return sum(violations.values())  # return the sum of violations
     
@@ -224,8 +235,8 @@ class Pinocchio:
     def updateQValue(self, q, state, action, reward, next_state, optimal_action=None):
         self.agent.updateQValue(q, state, action, reward, next_state, optimal_action)
 
-    def updateQFunctions(self, state, action, signals, next_state):
-        self.agent.updateQFunctions(state, action, signals, next_state)
+    def updateQFunctions(self, state, action, signals, next_state, optimal_action=None):
+        self.agent.updateQFunctions(state, action, signals, next_state, optimal_action)
 
     def setActions(self, actions):
         self.agent.setActions(actions)
@@ -274,3 +285,12 @@ class Pinocchio:
     
     def setLastAction(self, action):
         self.agent.setLastAction(action)
+
+    def getLastSignal(self):
+        return self.agent.getLastSignal()
+    
+    def setLastSignal(self, signal):
+        self.agent.setLastSignal(signal)
+
+    def printQFunctions(self, state):
+        self.agent.printQFunctions(state)

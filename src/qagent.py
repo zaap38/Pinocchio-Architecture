@@ -24,12 +24,19 @@ class QAgent:
         self.selection_method = "lex"
 
         self.lastAction = None
+        self.lastSignal = None
 
     def getLastAction(self):
         return self.lastAction
-    
+
     def setLastAction(self, action):
         self.lastAction = action
+    
+    def getLastSignal(self):
+        return self.lastSignal
+    
+    def setLastSignal(self, signal):
+        self.lastSignal = signal
 
     def setActions(self, actions):
         self.actions = actions
@@ -150,9 +157,17 @@ class QAgent:
         # max_next_q accounts for optimal_action if not None, else takes max
         max_next_q = max(self.getQValues(q, next_state).values(), default=0)
         if optimal_action is not None:
-            max_next_q = max(max_next_q, self.getQValues(q, next_state).get(optimal_action, 0))
+            # print("Opt:", optimal_action)
+            max_next_q = self.getQValues(q, next_state).get(optimal_action, 0)
+            # print("Max:", max_next_q, self.getQValues(q, next_state))
         qvalues[action] += self.alpha * (reward + self.gamma * max_next_q - qvalues[action])
+        # if state in self.Q[q]:
+        #     print("Bef:", self.Q[q][state][action])
+        #     print("Rew:", reward)
+        #     print("Delta:", self.alpha * (reward + self.gamma * max_next_q - qvalues[action]))
         self.Q[q][state] = qvalues
+        # if state in self.Q[q]:
+        #     print("Aft:", self.Q[q][state][action])
 
         if self.decay_method == "linear":
             self.epsilon -= self.epsilon_decay
@@ -160,9 +175,19 @@ class QAgent:
             self.epsilon *= self.epsilon_decay
         self.epsilon = max(0, self.epsilon)
 
-    def updateQFunctions(self, state, action, signals, next_state):
+    def updateQFunctions(self, state, action, signals, next_state, optimal_action=None):
         # print(signals, action)
         for q in self.preferences:
             if q not in signals:
                 raise ValueError(f"Signal '{q}' not found in signals. Available signals: {list(signals.keys())}")
-            self.updateQValue(q, state, action, signals[q], next_state)
+            self.updateQValue(q, state, action, signals[q], next_state, optimal_action)
+
+    def printQFunctions(self, state):
+        rounding = 2
+        print(f"Q-functions for agent {id(self)}:")
+        for q in self.preferences:
+            qvalues = cp.deepcopy(self.getQValues(q, state))
+            for qvalue in qvalues:
+                qvalues[qvalue] = round(qvalues[qvalue], rounding)
+            print(f"Q_{q}: {qvalues}")
+        print("Optimal action:", self.selectBestAction(state))

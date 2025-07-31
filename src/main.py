@@ -9,14 +9,16 @@ if __name__ == "__main__":
     env = Environment()
     # env.loadFile("src/environments/basic_5x5.txt")
 
-    preset = "taxi"
+    preset = "mini_taxi"#"taxi"
 
     env.loadPreset(preset, reset_agent=True)
 
+    env.setDebug(False)
     env.run(display=False, run_title="Training")
 
-    env.setSteps(2000)
+    env.setSteps(40)
     env.loadPreset(preset, reset_agent=False)
+    env.setDebug(False)
     env.run(display=True, run_title="Testing")
 
     env.printHistoric()
