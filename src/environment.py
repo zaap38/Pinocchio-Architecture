@@ -75,9 +75,7 @@ class Environment:
         self.doAction = self.doAction_1  # default action method
 
         self.debug = False
-
-    def setDebug(self, debug):
-        self.debug = debug
+        self.debug_judgement = False  # debug the judgement of the agents
 
     def addAgent(self, agent):
         self.agents.append(agent)
@@ -249,7 +247,7 @@ class Environment:
         self.window = 600
         
         if reset_agent:
-            self.steps = 1000000
+            self.steps = 2000000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
@@ -269,14 +267,15 @@ class Environment:
             # c norms Taxi
             ct1 = ConstitutiveNorm("role(taxi)")
             ct2 = ConstitutiveNorm("morning", "not_service")
-            ct3 = ConstitutiveNorm("evening", "not_service")
-            ct4 = ConstitutiveNorm("evening", "late")
+            ct3 = ConstitutiveNorm("night", "not_service")
+            ct4 = ConstitutiveNorm(["evening", "has_passenger"], "late")
             ct5 = ConstitutiveNorm("no_traffic", "no_traffic")
             ct6 = ConstitutiveNorm("time_0-10", "morning")
             ct7 = ConstitutiveNorm("time_11-20", "day")
-            ct8 = ConstitutiveNorm("time_31-40", "evening")
-            ct9 = ConstitutiveNorm("time_41-50", "night")
-            ct10 = ConstitutiveNorm("time_51-60", "night")
+            ct8 = ConstitutiveNorm("time_21-30", "evening")
+            ct9 = ConstitutiveNorm("time_31-40", "evening")
+            ct10 = ConstitutiveNorm("time_41-50", "night")
+            ct11 = ConstitutiveNorm("time_51-60", "night")
 
             # c norms Law
             cl1 = ConstitutiveNorm("dist_parking_<_4", "parking_near")
@@ -290,7 +289,7 @@ class Environment:
             taxi.addFact("speeding", lambda state, flags: state["actions"].get(taxi.name)[1] == "fast")
             taxi.addFact("stop", lambda state, flags: "pick" in flags or "drop" in flags)
             taxi.addFact("role(taxi)", lambda state, flags: True)
-            taxi.addFact("passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
+            taxi.addFact("has_passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
             taxi.addFact("time_0-10", lambda state, flags: state["iterations"] <= 10)
             taxi.addFact("time_11-20", lambda state, flags: 10 < state["iterations"] <= 20)
             taxi.addFact("time_21-30", lambda state, flags: 20 < state["iterations"] <= 30)
@@ -309,10 +308,18 @@ class Environment:
             taxi_sh.addNorm(r1)
             taxi_sh.addNorm(r2)
             taxi_sh.addNorm(r3)
-            taxi_sh.addConstitutiveNorm(r2, ct3)
+
             taxi_sh.addConstitutiveNorm(r2, ct4)
+            taxi_sh.addConstitutiveNorm(r2, ct5)
+            taxi_sh.addConstitutiveNorm(r2, ct8)
+            taxi_sh.addConstitutiveNorm(r2, ct9)
+
             taxi_sh.addConstitutiveNorm(r3, ct1)
             taxi_sh.addConstitutiveNorm(r3, ct2)
+            taxi_sh.addConstitutiveNorm(r3, ct3)
+            taxi_sh.addConstitutiveNorm(r3, ct6)
+            taxi_sh.addConstitutiveNorm(r3, ct10)
+            taxi_sh.addConstitutiveNorm(r3, ct11)
 
             taxi_sh.afs[str(r1)] = AF()
             taxi_sh.afs[str(r2)] = AF()
@@ -380,8 +387,8 @@ class Environment:
             agent.resetInventory()
             agent.setActions(actions)
             # agent.isRandom = True  # comment this
-            #self.setPos(agent, [1, 1])
-            self.setPos(agent, [rd.randint(1, self.width - 2), rd.randint(1, self.height - 2)])  # default position
+            self.setPos(agent, [1, 1])
+            # self.setPos(agent, [rd.randint(1, self.width - 2), rd.randint(1, self.height - 2)])  # default position
 
     def loadPacman(self, reset_agent=True):
 
@@ -627,10 +634,16 @@ class Environment:
             state_dict = all_states_dict[i]
             next_state = all_next_states[i - 1]
             next_state_dict = all_next_states_dict[i - 1]
-            all_signals[i]['V'] = agent.judge(next_state_dict, all_flags[i], False)  # judges the consequences
+            if self.debug_judgement:
+                print("State:",state)
+                print("Q-Functions:", agent.printQFunctions(state))
+            all_signals[i]['V'] = agent.judge(next_state_dict, all_flags[i], self.debug_judgement)  # judges the consequences
             optimalAction = agent.selectBestAction(next_state)
             if optimalAction is not None:
-                optimalAction = optimalAction[0]
+                if agent.isOptimal:
+                    optimalAction = optimalAction[0]
+                else:
+                    optimalAction = rd.choice(optimalAction)
             agent.updateQFunctions(state, all_actions[i], all_signals[i], next_state, optimalAction)
             agent.setLastSignal(all_signals[i])
         
@@ -666,11 +679,15 @@ class Environment:
                                      for name, obj in self.objects.items()))
         
         # iteration
-        iteration_state = self.iterations // 6
+        iteration_state = self.iterations // 5#10
 
         # final state
         state = [grid_state, agent_pos_state, objects_state, agent_inventory, iteration_state]
         return tuple(state)
+    
+    def setOptimal(self, value):
+        for agent in self.agents:
+            agent.setOptimal(value)
     
     def getCondition(self, condition):
         # if starts with 'not-', it is a negation

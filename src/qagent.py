@@ -15,11 +15,13 @@ class QAgent:
 
         self.decay_method = "linear"
         self.epsilon = 1.0
+        self.min_epsilon = 0.08  # minimum epsilon value
         self.epsilon_decay = 0
-        self.alpha = 0.1
+        self.alpha = 0.2#0.1
         self.gamma = 0.9
 
         self.isRandom = False
+        self.optimal = False
 
         self.selection_method = "lex"
 
@@ -131,14 +133,18 @@ class QAgent:
     def deltaLexicographic(self, state, tolerance=10):
         # tolerance in percent
         actions = cp.deepcopy(self.actions)
-        for q in self.preferences:
+        t = tolerance
+        for i, q in enumerate(self.preferences):
             # print(actions, end="->")
-            actions = self.getBestActions(q, state, actions, tolerance)
+            if i == len(self.preferences) - 1:
+                # last preference, no tolerance
+                t = 0
+            actions = self.getBestActions(q, state, actions, t)
         # print(actions)
         return actions
 
     def getAction(self, state):
-        if rd.random() < self.epsilon or self.isRandom:
+        if not self.optimal and (rd.random() < self.epsilon or self.isRandom):
             return rd.choice(self.actions)
         else:
             best_actions = self.selectBestAction(state)
@@ -157,23 +163,15 @@ class QAgent:
         # max_next_q accounts for optimal_action if not None, else takes max
         max_next_q = max(self.getQValues(q, next_state).values(), default=0)
         if optimal_action is not None:
-            # print("Opt:", optimal_action)
             max_next_q = self.getQValues(q, next_state).get(optimal_action, 0)
-            # print("Max:", max_next_q, self.getQValues(q, next_state))
         qvalues[action] += self.alpha * (reward + self.gamma * max_next_q - qvalues[action])
-        # if state in self.Q[q]:
-        #     print("Bef:", self.Q[q][state][action])
-        #     print("Rew:", reward)
-        #     print("Delta:", self.alpha * (reward + self.gamma * max_next_q - qvalues[action]))
         self.Q[q][state] = qvalues
-        # if state in self.Q[q]:
-        #     print("Aft:", self.Q[q][state][action])
 
         if self.decay_method == "linear":
             self.epsilon -= self.epsilon_decay
         elif self.decay_method == "exponential":
             self.epsilon *= self.epsilon_decay
-        self.epsilon = max(0, self.epsilon)
+        self.epsilon = max(self.min_epsilon, self.epsilon)
 
     def updateQFunctions(self, state, action, signals, next_state, optimal_action=None):
         # print(signals, action)

@@ -169,8 +169,15 @@ class Pinocchio:
             print("JUDGES", self.name, id(self.agent))
             print("Inv.:", self.getInventory())
             print("Last action:", self.getLastAction())
-            print("Brute:", flags)
-            print("Inst.:", facts)
+            print("Flags:", flags)
+            print("Brute:", facts)
+            inst = {}
+            for rnorm in self.norms:
+                inst[str(rnorm)] = []
+                for stakeholder in self.stakeholders:
+                    inst[str(rnorm)].extend(stakeholder.closure(rnorm, facts))
+                inst[str(rnorm)] = list(set(inst[str(rnorm)]))
+                print("Inst.", str(rnorm), ":", inst[str(rnorm)])
             # for each norm
         # get the activate arguments, and combine the AFs of each stakeholders
         # then judges
@@ -204,8 +211,7 @@ class Pinocchio:
                 violations[str(rnorm)] = -rnorm.weight
                 didViolation = True
             if debug:
-                print("Violates", str(rnorm), ":", didViolation)
-                print("Extension:", extension)
+                print("Violates", str(rnorm), ":", didViolation, '| Extension:', extension)
 
         return sum(violations.values())  # return the sum of violated norms' weights
     
@@ -296,3 +302,9 @@ class Pinocchio:
 
     def printQFunctions(self, state):
         self.agent.printQFunctions(state)
+
+    def setOptimal(self, optimal):
+        self.agent.optimal = optimal
+
+    def isOptimal(self):
+        return self.agent.optimal

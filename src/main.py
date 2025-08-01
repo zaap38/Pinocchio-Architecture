@@ -16,12 +16,15 @@ if __name__ == "__main__":
 
     env.loadPreset(preset, reset_agent=True)
 
-    env.setDebug(False)
+    env.debug = False
+    env.debug_judgement = False
     env.run(display=False, run_title="Training")
 
-    env.setSteps(2000)
+    env.debug = False
+    env.debug_judgement = False
+    env.setOptimal(True)
+    env.setSteps(100000)
     env.loadPreset(preset, reset_agent=False)
-    env.setDebug(False)
     env.run(display=True, run_title="Testing")
 
     env.printHistoric()
