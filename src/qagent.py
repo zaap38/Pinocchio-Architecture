@@ -15,13 +15,14 @@ class QAgent:
 
         self.decay_method = "linear"
         self.epsilon = 1.0
-        self.min_epsilon = 0.08  # minimum epsilon value
+        self.min_epsilon = 0.1  # minimum epsilon value
         self.epsilon_decay = 0
-        self.alpha = 0.2#0.1
-        self.gamma = 0.9
+        self.alpha = 0.05
+        self.gamma = 0.99
 
         self.isRandom = False
         self.optimal = False
+        self.learning = True
 
         self.selection_method = "lex"
 
@@ -81,7 +82,7 @@ class QAgent:
         else:
             raise ValueError(f"Q-function '{name}' already exists.")
 
-    def getBestActions(self, qfunction, state, actions=None, tolerance=0):
+    def getBestActions(self, qfunction, state, actions=None, tolerance=0, fixed=False):
         if actions is None:
             actions = cp.deepcopy(self.actions)
         qvalues = self.getQValues(qfunction, state)
@@ -89,7 +90,10 @@ class QAgent:
             return None
         max_value = max([qvalues[action] for action in actions if action in qvalues])
         # apply tolerance
-        max_value = max_value - (tolerance / 100) * abs(max_value - min(qvalues.values()))
+        if fixed:
+            max_value = max_value - tolerance
+        else:
+            max_value = max_value - (tolerance / 100) * abs(max_value - min(qvalues.values()))
         return [action for action, value in qvalues.items() if value >= max_value and action in actions]
     
     def getActionsAboveThreshold(self, qfunction, state, actions=None, threshold=0):
@@ -111,7 +115,7 @@ class QAgent:
         if self.selection_method == "tlex":
             return self.thresholdLexicographic(state)
         if self.selection_method == "dlex":
-            return self.deltaLexicographic(state)
+            return self.deltaLexicographic(state, 0.1, True)
 
     def lexicographic(self, state):
         actions = cp.deepcopy(self.actions)
@@ -130,7 +134,7 @@ class QAgent:
         # print(actions)
         return actions
 
-    def deltaLexicographic(self, state, tolerance=10):
+    def deltaLexicographic(self, state, tolerance=10, fixed=False):
         # tolerance in percent
         actions = cp.deepcopy(self.actions)
         t = tolerance
@@ -139,7 +143,7 @@ class QAgent:
             if i == len(self.preferences) - 1:
                 # last preference, no tolerance
                 t = 0
-            actions = self.getBestActions(q, state, actions, t)
+            actions = self.getBestActions(q, state, actions, t, fixed)
         # print(actions)
         return actions
 
@@ -165,6 +169,9 @@ class QAgent:
         if optimal_action is not None:
             max_next_q = self.getQValues(q, next_state).get(optimal_action, 0)
         qvalues[action] += self.alpha * (reward + self.gamma * max_next_q - qvalues[action])
+        qvalues[action] = round(qvalues[action], 2)
+        if qvalues[action] == -0.0:
+            qvalues[action] = 0.0
         self.Q[q][state] = qvalues
 
         if self.decay_method == "linear":
@@ -175,6 +182,8 @@ class QAgent:
 
     def updateQFunctions(self, state, action, signals, next_state, optimal_action=None):
         # print(signals, action)
+        if not self.learning:
+            return
         for q in self.preferences:
             if q not in signals:
                 raise ValueError(f"Signal '{q}' not found in signals. Available signals: {list(signals.keys())}")
@@ -189,3 +198,6 @@ class QAgent:
                 qvalues[qvalue] = round(qvalues[qvalue], rounding)
             print(f"Q_{q}: {qvalues}")
         print("Optimal action:", self.selectBestAction(state))
+
+    def has(self, item):
+        return item in self.inventory

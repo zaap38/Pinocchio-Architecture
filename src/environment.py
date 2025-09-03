@@ -247,7 +247,7 @@ class Environment:
         self.window = 600
         
         if reset_agent:
-            self.steps = 2000000
+            self.steps = 500000#500000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
@@ -382,10 +382,13 @@ class Environment:
         self.objects["destination"]["inv_rem"] = ["passenger"]
         self.objects["destination"]["condition"] = ["passenger"]
         self.objects["destination"]["flags"] = ["drop"]
+        self.objects["destination"]["global_flags"] = ["end"]
 
         for agent in self.agents:
             agent.resetInventory()
             agent.setActions(actions)
+            agent.setLastAction(None)  # reset last action
+            agent.setLastSignal(None)  # reset last signal
             # agent.isRandom = True  # comment this
             self.setPos(agent, [1, 1])
             # self.setPos(agent, [rd.randint(1, self.width - 2), rd.randint(1, self.height - 2)])  # default position
@@ -517,25 +520,34 @@ class Environment:
         if not display:
             pbar = tqdm(total=self.steps, desc=run_title)
 
+        signals_total = {}
+
         while i < self.steps or not reset:
             i += 1
-            reset = False
             if pbar is not None:
                 pbar.update(1)
             if display and self.iterations == 0:
                 print("=========VVVVV=========VVVVV=========")
-            log = self.step()
+            log, ending = self.step()
             logs.append(log)
+            reset = False
+            for k, v in log.items():
+                if k not in signals_total:
+                    signals_total[k] = 0
+                signals_total[k] += v
             if display:
                 print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
                 for agent in self.agents:
                     print(f"{agent.name}: Action={agent.getLastAction()}  Signal={agent.getLastSignal()}  Inv: {agent.getInventory()}")
                 self.display()
             self.iterations += 1
-            if self.iterations >= self.timeout:  # reset the agent every X steps
+            if self.iterations >= self.timeout or ending:  # reset the agent every X steps or when "end" flag is triggered
                 self.loadPreset(self.loadedPreset, reset_agent=False)
                 self.iterations = 0
                 reset = True
+                if display:
+                    print("Total:", signals_total)
+                signals_total = {}
 
         end_time = time.time()
 
@@ -636,7 +648,7 @@ class Environment:
             next_state_dict = all_next_states_dict[i - 1]
             if self.debug_judgement:
                 print("State:",state)
-                print("Q-Functions:", agent.printQFunctions(state))
+                # print("Q-Functions:", agent.printQFunctions(state))
             all_signals[i]['V'] = agent.judge(next_state_dict, all_flags[i], self.debug_judgement)  # judges the consequences
             optimalAction = agent.selectBestAction(next_state)
             if optimalAction is not None:
@@ -647,7 +659,13 @@ class Environment:
             agent.updateQFunctions(state, all_actions[i], all_signals[i], next_state, optimalAction)
             agent.setLastSignal(all_signals[i])
         
-        return all_signals[-1]
+        ending = False
+        for g_flag in all_gflags:
+            if "end" in g_flag:
+                ending = True
+                break
+
+        return all_signals[-1], ending
     
     def getStateDict(self):
         state = {}
@@ -688,6 +706,10 @@ class Environment:
     def setOptimal(self, value):
         for agent in self.agents:
             agent.setOptimal(value)
+
+    def setLearning(self, value):
+        for agent in self.agents:
+            agent.setLearning(value)
     
     def getCondition(self, condition):
         # if starts with 'not-', it is a negation
@@ -776,11 +798,13 @@ class Environment:
         reward = 0
         movement = action[0]
         speed = action[1]
-
+        
         if speed == "fast":
             reward -= 0.5
         elif speed == "slow":
             reward -= 1
+        # if not agent.has("passenger"):
+        #     reward = 0
         
         if movement == "up":
             if pos[1] > 0 and self.grid[pos[1] - 1][pos[0]].type != WALL:
@@ -808,6 +832,5 @@ class Environment:
         reward_handle, flags, global_flags = self.handleObjectsOnPosition(agent)
         reward += reward_handle
         flags.append("road" if self.grid[pos[1]][pos[0]].type == ROAD else "pavement")
-
         signals = {"R": reward, "V": 0}
         return signals, flags, global_flags

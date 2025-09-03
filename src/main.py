@@ -23,7 +23,15 @@ if __name__ == "__main__":
     env.debug = False
     env.debug_judgement = False
     env.setOptimal(True)
-    env.setSteps(100000)
+    env.setSteps(200000)
+    env.loadPreset(preset, reset_agent=False)
+    env.run(display=False, run_title="Convergence")
+
+    env.debug = True
+    env.debug_judgement = True
+    env.setOptimal(True)
+    env.setLearning(False)
+    env.setSteps(1000)
     env.loadPreset(preset, reset_agent=False)
     env.run(display=True, run_title="Testing")
 

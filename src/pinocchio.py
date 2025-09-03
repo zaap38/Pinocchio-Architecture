@@ -212,6 +212,7 @@ class Pinocchio:
                 didViolation = True
             if debug:
                 print("Violates", str(rnorm), ":", didViolation, '| Extension:', extension)
+                pass
 
         return sum(violations.values())  # return the sum of violated norms' weights
     
@@ -306,5 +307,11 @@ class Pinocchio:
     def setOptimal(self, optimal):
         self.agent.optimal = optimal
 
+    def setLearning(self, learning):
+        self.agent.learning = learning
+
     def isOptimal(self):
         return self.agent.optimal
+    
+    def has(self, item):
+        return self.agent.has(item)
