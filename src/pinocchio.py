@@ -260,7 +260,7 @@ class Pinocchio:
         self.agent.addQFunction("V")
         self.agent.addQFunction("R")
         self.agent.initDecay(steps)
-        self.agent.selection_method = "dlex"
+        self.agent.selection_method = "lex"
 
     def setSteps(self, steps):
         self.agent.initDecay(steps)

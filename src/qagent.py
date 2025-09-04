@@ -17,7 +17,7 @@ class QAgent:
         self.epsilon = 1.0
         self.min_epsilon = 0.1  # minimum epsilon value
         self.epsilon_decay = 0
-        self.alpha = 0.05
+        self.alpha = 0.05  #0.05
         self.gamma = 0.99
 
         self.isRandom = False
