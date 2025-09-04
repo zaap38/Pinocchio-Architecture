@@ -263,7 +263,7 @@ class Environment:
         self.window = 600
         
         if reset_agent:
-            self.steps = 500000#500000
+            self.steps = 2000000#500000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
@@ -307,8 +307,8 @@ class Environment:
             taxi.addFact("role(taxi)", lambda state, flags: True)
             taxi.addFact("has_passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
             taxi.addFact("time_0-10", lambda state, flags: state["iterations"] <= 10)
-            taxi.addFact("time_11-20", lambda state, flags: 10 < state["iterations"] <= 20)
-            taxi.addFact("time_21-30", lambda state, flags: 20 < state["iterations"] <= 30)
+            taxi.addFact("time_11-20", lambda state, flags: 10 < state["iterations"] <= 15)
+            taxi.addFact("time_21-30", lambda state, flags: 15 < state["iterations"] <= 30)
             taxi.addFact("time_31-40", lambda state, flags: 30 < state["iterations"] <= 40)
             taxi.addFact("time_41-50", lambda state, flags: 40 < state["iterations"] <= 50)
             taxi.addFact("time_51-60", lambda state, flags: 50 < state["iterations"])
@@ -379,7 +379,7 @@ class Environment:
         self.objects["parking"]["pos"] = [7, 3]
         self.objects["parking"]["symbol"] = "P"
         self.objects["parking"]["flags"] = ["parked", "pick"]
-        self.objects["parking"]["reward"] = -5
+        self.objects["parking"]["reward"] = -5 + 50
         self.objects["parking"]["inv_add"] = ["passenger"]
         self.objects["parking"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -387,6 +387,7 @@ class Environment:
         self.objects["street"]["pos"] = [5, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["pick"]
+        self.objects["street"]["reward"] = 0 + 50
         self.objects["street"]["inv_add"] = ["passenger"]
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -828,8 +829,8 @@ class Environment:
             reward -= 0.5
         elif speed == "slow":
             reward -= 1
-        # if not agent.has("passenger"):
-        #     reward = 0
+        if not agent.has("passenger"):
+            reward = 0
         
         if movement == "up":
             if pos[1] > 0 and self.grid[pos[1] - 1][pos[0]].type != WALL:
