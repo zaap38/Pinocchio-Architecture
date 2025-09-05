@@ -77,6 +77,10 @@ class Environment:
         self.debug = False
         self.debug_judgement = False  # debug the judgement of the agents
 
+        self.override_1 = False
+        self.override_2 = False
+        self.override_3 = False
+
     def addAgent(self, agent):
         self.agents.append(agent)
         self.pos[agent.name] = [1, 1]  # default position, can be changed later
@@ -118,7 +122,7 @@ class Environment:
         self.window = 100
         
         if reset_agent:
-            self.steps = 40000
+            self.steps = 60000
             self.timeout = 20
             self.loadFile("src/environments/taxi_5x5.txt")
             taxi = Pinocchio("Taxi")
@@ -142,7 +146,8 @@ class Environment:
             ct4 = ConstitutiveNorm(["evening", "has_passenger"], "late")
             ct5 = ConstitutiveNorm("no_traffic", "no_traffic")
             ct6 = ConstitutiveNorm("time_0-5", "morning")
-            ct7 = ConstitutiveNorm("time_6-7", "day")
+            # ct7 = ConstitutiveNorm("time_6-7", "day")
+            ct7 = ConstitutiveNorm("time_6-7", "evening")
             ct8 = ConstitutiveNorm("time_8-15", "evening")
             ct9 = ConstitutiveNorm("time_16-20", "night")
 
@@ -178,6 +183,7 @@ class Environment:
 
             taxi_sh.addConstitutiveNorm(r2, ct4)
             taxi_sh.addConstitutiveNorm(r2, ct5)
+            taxi_sh.addConstitutiveNorm(r2, ct7)
             taxi_sh.addConstitutiveNorm(r2, ct8)
             taxi_sh.addConstitutiveNorm(r2, ct9)
 
@@ -228,13 +234,14 @@ class Environment:
         self.objects["parking"]["pos"] = [3, 2]
         self.objects["parking"]["symbol"] = "P"
         self.objects["parking"]["flags"] = ["parked", "pick"]
-        self.objects["parking"]["reward"] = -5
+        self.objects["parking"]["reward"] = -5 + 50
         self.objects["parking"]["inv_add"] = ["passenger"]
         self.objects["parking"]["condition"] = ["not-passenger", "not-dropped"]
 
         self.objects["street"] = self.makeObject()
         self.objects["street"]["pos"] = [1, 2]
         self.objects["street"]["symbol"] = "S"
+        self.objects["street"]["reward"] = 0 + 50
         self.objects["street"]["flags"] = ["pick"]
         self.objects["street"]["inv_add"] = ["passenger"]
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
@@ -379,7 +386,7 @@ class Environment:
         self.objects["parking"]["pos"] = [7, 3]
         self.objects["parking"]["symbol"] = "P"
         self.objects["parking"]["flags"] = ["parked", "pick"]
-        self.objects["parking"]["reward"] = -5 + 50
+        self.objects["parking"]["reward"] = -5 #+ 50
         self.objects["parking"]["inv_add"] = ["passenger"]
         self.objects["parking"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -387,7 +394,7 @@ class Environment:
         self.objects["street"]["pos"] = [5, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["pick"]
-        self.objects["street"]["reward"] = 0 + 50
+        self.objects["street"]["reward"] = 0 #+ 50
         self.objects["street"]["inv_add"] = ["passenger"]
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -626,6 +633,9 @@ class Environment:
         all_flags = []
         all_gflags = []
 
+        self.override_2 = self.override_1
+        self.override_1 = False
+
         # sequential
         for agent in self.agents:
             state = self.getState()
@@ -646,6 +656,13 @@ class Environment:
             all_flags.append(flags)
             all_gflags.append(gflags)
 
+            if id(agent) == id(self.agents[0]):  # only for the first agent
+                agent.clearOverrides()
+                self.override_1 = rd.random() < 0.1
+                self.override_3 = self.override_2
+                self.override_2 = False
+                pass
+
             next_state = self.getState()
             next_state_dict = self.getStateDict()
             all_next_states.append(next_state)
@@ -663,10 +680,14 @@ class Environment:
         for i in range(len(all_next_states_dict)):
             all_next_states_dict[i]["iterations"] += 1
             tmp = list(all_next_states[i])
-            tmp[-1] = all_next_states_dict[i]["iterations"] // 5
+            tmp[-2] = all_next_states_dict[i]["iterations"] // 5
             all_next_states[i] = tuple(tmp)
+
         # print(all_next_states)
         for i, agent in enumerate(self.agents):
+            if self.override_3:
+                agent.overrideJudgement("F(['speeding'])", self.override_3)
+                pass
             state = all_states[i]
             state_dict = all_states_dict[i]
             next_state = all_next_states[i - 1]
@@ -684,6 +705,8 @@ class Environment:
                 # print("Optimal:", optimalAction)
             agent.updateQFunctions(state, all_actions[i], all_signals[i], next_state, optimalAction)
             agent.setLastSignal(all_signals[i])
+            agent.clearOverrides()
+            agent.override_3 = False
         
         ending = False
         for g_flag in all_gflags:
@@ -702,6 +725,7 @@ class Environment:
         state["inventory"] = {agent.name: agent.getInventory() for agent in self.agents}
         state["iterations"] = self.iterations
         state["actions"] = {agent.name: agent.getLastAction() for agent in self.agents}
+        state["override"] = self.override_1 or self.override_2
 
         return state
 
@@ -723,10 +747,13 @@ class Environment:
                                      for name, obj in self.objects.items()))
         
         # iteration
-        iteration_state = self.iterations // 5#10
+        iteration_state = self.iterations // 5
+
+        # speeding norm override
+        forbid_speeding = self.override_1 or self.override_2
 
         # final state
-        state = [grid_state, agent_pos_state, objects_state, agent_inventory, iteration_state]
+        state = [grid_state, agent_pos_state, objects_state, agent_inventory, iteration_state, forbid_speeding]
         return tuple(state)
     
     def setOptimal(self, value):
@@ -829,8 +856,8 @@ class Environment:
             reward -= 0.5
         elif speed == "slow":
             reward -= 1
-        if not agent.has("passenger"):
-            reward = 0
+        # if not agent.has("passenger"):
+        #     reward = 0
         
         if movement == "up":
             if pos[1] > 0 and self.grid[pos[1] - 1][pos[0]].type != WALL:

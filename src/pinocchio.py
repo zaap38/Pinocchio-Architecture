@@ -157,6 +157,7 @@ class Pinocchio:
         self.stakeholders = []
         self.norms = []
         self.facts = {}
+        self.override = {}
 
     def judge(self, state, flags, debug=False):
         # add all rnorms to the facts
@@ -183,6 +184,7 @@ class Pinocchio:
         # then judges
         violations = {}
         for rnorm in self.norms:
+
             violations[str(rnorm)] = 0
             af = AF()
             all_facts = []
@@ -207,7 +209,11 @@ class Pinocchio:
             extension = af.computeExtension("grounded")
             didViolation = False
             # print(all_facts, extension, "Comply:", rnorm.comply(all_facts))
-            if str(rnorm) in extension and not rnorm.comply(all_facts):
+            normActive = str(rnorm) in extension
+            if str(rnorm) in self.override:
+                normActive = self.override[str(rnorm)]
+
+            if normActive and not rnorm.comply(all_facts):
                 violations[str(rnorm)] = -rnorm.weight
                 didViolation = True
             if debug:
@@ -228,6 +234,12 @@ class Pinocchio:
             if self.facts[fact_item](state, flags):
                 facts.append(fact_item)
         return facts
+    
+    def overrideJudgement(self, norm_name, value):
+        self.override[norm_name] = value
+
+    def clearOverrides(self):
+        self.override = {}
 
     def getQValues(self, qfunction, state):
         return self.agent.getQValues(qfunction, state)
