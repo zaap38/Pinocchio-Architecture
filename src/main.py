@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # mini_taxi
     # taxi
     # avoidant_taxi
-    preset = "avoidant_taxi"
+    preset = "taxi"
 
     env.loadPreset(preset, reset_agent=True)
 

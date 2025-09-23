@@ -354,7 +354,7 @@ class Environment:
 
     def loadTaxi(self, reset_agent=True):
 
-        self.window = 600
+        self.window = 10
         
         if reset_agent:
             self.steps = 2000000#500000
@@ -364,8 +364,8 @@ class Environment:
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
             # taxi.loadNormativeAgent(self.steps)
-            # taxi.loadNonAvoidantAgent(self.steps)
-            taxi.loadAvoidantAgent(self.steps)
+            taxi.loadNonAvoidantAgent(self.steps)
+            # taxi.loadAvoidantAgent(self.steps)
             self.agents.append(taxi)
 
             # r norms
