@@ -17,9 +17,9 @@ if __name__ == "__main__":
 
     env.loadPreset(preset, reset_agent=True)
 
-    env.debug = False
-    env.debug_judgement = False
-    env.run(display=False, run_title="Training")
+    env.debug = 0
+    env.debug_judgement = 0
+    env.run(display=0, run_title="Training")
 
     # env.debug = False
     # env.debug_judgement = False

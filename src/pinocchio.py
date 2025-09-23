@@ -218,14 +218,15 @@ class Pinocchio:
 
             if not normActive:  # maybe add the condition for the header to be in the facts
                 defeats[str(rnorm)] = -1
-            
-            if normActive and not rnorm.comply(all_facts):
+            if not rnorm.comply(all_facts):
                 noncompliances[str(rnorm)] = -1
 
             if normActive and not rnorm.comply(all_facts):
                 violations[str(rnorm)] = -rnorm.weight
                 didViolation = True
             if debug:
+                print("Avoidance condition:", rnorm.comply(all_facts))
+                print("Responsible:", self.responsible)
                 print("Violates", str(rnorm), ":", didViolation, '| Extension:', extension)
                 pass
 

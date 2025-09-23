@@ -285,7 +285,7 @@ class Environment:
             r2 = RegulativeNorm("F", "speeding")
 
             taxi.addNorm(r2)
-            ct4 = ConstitutiveNorm(["evening", "has_passenger"], "late")
+            ct4 = ConstitutiveNorm("evening", "late")
             ct6 = ConstitutiveNorm("time_0-10", "morning")
             ct7 = ConstitutiveNorm("time_11-20", "day")
             ct8 = ConstitutiveNorm("time_21-30", "evening")
@@ -800,7 +800,7 @@ class Environment:
             agent.agent.updateQValue2('D', state, action, all_signals[i]['D'], next_state)
 
             all_signals[i]['A'] = sum(signals['A'].values())
-            if not agent.responsible:
+            if not agent.responsible or sum(signals['V'].values()) < 0:
                 all_signals[i]['A'] = 0
             if 'A' not in agent.agent.preferences:
                 agent.agent.updateQValue('A', state, action, all_signals[i]['A'], next_state)
