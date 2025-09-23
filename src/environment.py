@@ -116,6 +116,8 @@ class Environment:
             self.loadAdam(reset_agent)
         elif presetName == "mini_taxi":
             self.loadMiniTaxi(reset_agent)
+        elif presetName == "avoidant_taxi":
+            self.loadAvoidantTaxi(reset_agent)
 
     def loadMiniTaxi(self, reset_agent=True):
 
@@ -265,6 +267,91 @@ class Environment:
             self.setPos(agent, [1, 1])
             # self.setPos(agent, [rd.randint(1, self.width - 2), rd.randint(1, self.height - 2)])  # default position
 
+    def loadAvoidantTaxi(self, reset_agent=True):
+        self.window = 10
+        
+        if reset_agent:
+            self.steps = 200000
+            self.timeout = 40
+            self.loadFile("src/environments/taxi_5x5.txt")
+            # self.loadFile("src/environments/taxi_10x10_blocked.txt")
+            taxi = Pinocchio("Taxi")
+            # taxi.loadOptimalAgent(self.steps)
+            # taxi.loadNormativeAgent(self.steps)
+            # taxi.loadNonAvoidantAgent(self.steps)
+            taxi.loadAvoidantAgent(self.steps)
+            self.agents.append(taxi)
+            
+            r2 = RegulativeNorm("F", "speeding")
+
+            taxi.addNorm(r2)
+            ct4 = ConstitutiveNorm(["evening", "has_passenger"], "late")
+            ct6 = ConstitutiveNorm("time_0-10", "morning")
+            ct7 = ConstitutiveNorm("time_11-20", "day")
+            ct8 = ConstitutiveNorm("time_21-30", "evening")
+            ct9 = ConstitutiveNorm("time_31-40", "night")
+
+            # facts
+            taxi.addFact("speeding", lambda state, flags: state["actions"].get(taxi.name)[1] in ["fast", "+"])
+            taxi.addFact("has_passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
+            taxi.addFact("time_0-10", lambda state, flags: state["iterations"] <= 10)
+            taxi.addFact("time_11-20", lambda state, flags: 10 < state["iterations"] <= 20)
+            taxi.addFact("time_21-30", lambda state, flags: 20 < state["iterations"] <= 30)
+            taxi.addFact("time_31-40", lambda state, flags: 30 < state["iterations"] <= 40)
+
+            attacks_r2 = [("late", str(r2))]
+
+            # stakeholders
+            taxi_sh = Stakeholder("Taxi")
+            taxi_sh.addNorm(r2)
+
+            taxi_sh.addConstitutiveNorm(r2, ct4)
+            taxi_sh.addConstitutiveNorm(r2, ct6)
+            taxi_sh.addConstitutiveNorm(r2, ct7)
+            taxi_sh.addConstitutiveNorm(r2, ct8)
+            taxi_sh.addConstitutiveNorm(r2, ct9)
+
+            taxi_sh.afs[str(r2)] = AF()
+            taxi_sh.setArguments(str(r2), [str(r2), "late"])
+            taxi_sh.setAttacks(str(r2), attacks_r2)
+
+            taxi.addStakeholder(taxi_sh)
+
+        movements = ["^", "v", "<", ">"]
+        speeds = ["-", "+"]
+        actions = []
+        for m in movements:
+            for s in speeds:
+                actions.append((m, s))
+
+        self.doAction = self.doAction_2  # change action method for taxi
+
+        self.objects["street"] = self.makeObject()
+        self.objects["street"]["pos"] = [3, 1]
+        self.objects["street"]["symbol"] = "P"
+        self.objects["street"]["flags"] = ["pick"]
+        self.objects["street"]["reward"] = 50
+        self.objects["street"]["inv_add"] = ["passenger"]
+        self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
+
+        self.objects["destination"] = self.makeObject()
+        self.objects["destination"]["pos"] = [1, 3]
+        self.objects["destination"]["symbol"] = "D"
+        self.objects["destination"]["reward"] = 100
+        self.objects["destination"]["inv_add"] = ["dropped"]
+        self.objects["destination"]["inv_rem"] = ["passenger"]
+        self.objects["destination"]["condition"] = ["passenger"]
+        self.objects["destination"]["flags"] = ["drop"]
+        self.objects["destination"]["global_flags"] = ["end"]
+
+        for agent in self.agents:
+            agent.resetInventory()
+            agent.responsible = False
+            agent.setActions(actions)
+            agent.setLastAction(None)  # reset last action
+            agent.setLastSignal(None)  # reset last signal
+            self.setPos(agent, [1, 1])
+
     def loadTaxi(self, reset_agent=True):
 
         self.window = 600
@@ -273,19 +360,22 @@ class Environment:
             self.steps = 2000000#500000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
+            # self.loadFile("src/environments/taxi_10x10_blocked.txt")
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
-            taxi.loadNormativeAgent(self.steps)
+            # taxi.loadNormativeAgent(self.steps)
+            # taxi.loadNonAvoidantAgent(self.steps)
+            taxi.loadAvoidantAgent(self.steps)
             self.agents.append(taxi)
 
             # r norms
-            r1 = RegulativeNorm("F", "pavement")
+            # r1 = RegulativeNorm("F", "pavement")
             r2 = RegulativeNorm("F", "speeding")
-            r3 = RegulativeNorm("F", "stop", "road")
+            # r3 = RegulativeNorm("F", "stop", "road")
 
-            taxi.addNorm(r1)
+            # taxi.addNorm(r1)
             taxi.addNorm(r2)
-            taxi.addNorm(r3)
+            # taxi.addNorm(r3)
 
             # c norms Taxi
             ct1 = ConstitutiveNorm("role(taxi)")
@@ -314,61 +404,61 @@ class Environment:
             taxi.addFact("role(taxi)", lambda state, flags: True)
             taxi.addFact("has_passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
             taxi.addFact("time_0-10", lambda state, flags: state["iterations"] <= 10)
-            taxi.addFact("time_11-20", lambda state, flags: 10 < state["iterations"] <= 15)
-            taxi.addFact("time_21-30", lambda state, flags: 15 < state["iterations"] <= 30)
+            taxi.addFact("time_11-20", lambda state, flags: 0 < state["iterations"] <= 10)
+            taxi.addFact("time_21-30", lambda state, flags: 10 < state["iterations"] <= 30)
             taxi.addFact("time_31-40", lambda state, flags: 30 < state["iterations"] <= 40)
             taxi.addFact("time_41-50", lambda state, flags: 40 < state["iterations"] <= 50)
             taxi.addFact("time_51-60", lambda state, flags: 50 < state["iterations"])
             taxi.addFact("dist_parking_<_4", funfacts.parking_close)
             # taxi.addFact("in_city", lambda state, flags: True)
 
-            attacks_r1 = []
+            # attacks_r1 = []
             attacks_r2 = [("late", str(r2)), ("no_traffic", str(r2)), ("no_exception", "late"), ("no_exception", "no_traffic")]
-            attacks_r3 = [("role(taxi)", str(r3)), ("not_service", "role(taxi)"), ("parking_near", "role(taxi)")]
+            # attacks_r3 = [("role(taxi)", str(r3)), ("not_service", "role(taxi)"), ("parking_near", "role(taxi)")]
 
             # stakeholders
             taxi_sh = Stakeholder("Taxi")
-            taxi_sh.addNorm(r1)
+            # taxi_sh.addNorm(r1)
             taxi_sh.addNorm(r2)
-            taxi_sh.addNorm(r3)
+            # taxi_sh.addNorm(r3)
 
             taxi_sh.addConstitutiveNorm(r2, ct4)
             taxi_sh.addConstitutiveNorm(r2, ct5)
             taxi_sh.addConstitutiveNorm(r2, ct8)
             taxi_sh.addConstitutiveNorm(r2, ct9)
 
-            taxi_sh.addConstitutiveNorm(r3, ct1)
-            taxi_sh.addConstitutiveNorm(r3, ct2)
-            taxi_sh.addConstitutiveNorm(r3, ct3)
-            taxi_sh.addConstitutiveNorm(r3, ct6)
-            taxi_sh.addConstitutiveNorm(r3, ct10)
-            taxi_sh.addConstitutiveNorm(r3, ct11)
+            # taxi_sh.addConstitutiveNorm(r3, ct1)
+            # taxi_sh.addConstitutiveNorm(r3, ct2)
+            # taxi_sh.addConstitutiveNorm(r3, ct3)
+            # taxi_sh.addConstitutiveNorm(r3, ct6)
+            # taxi_sh.addConstitutiveNorm(r3, ct10)
+            # taxi_sh.addConstitutiveNorm(r3, ct11)
 
-            taxi_sh.afs[str(r1)] = AF()
+            # taxi_sh.afs[str(r1)] = AF()
             taxi_sh.afs[str(r2)] = AF()
-            taxi_sh.afs[str(r3)] = AF()
+            # taxi_sh.afs[str(r3)] = AF()
 
-            taxi_sh.setArguments(str(r1), [str(r1)])
+            # taxi_sh.setArguments(str(r1), [str(r1)])
             taxi_sh.setArguments(str(r2), [str(r2), "no_traffic", "late"])
             taxi_sh.setAttacks(str(r2), attacks_r2)
-            taxi_sh.setArguments(str(r3), [str(r3), "not_service", "role(taxi)"])
-            taxi_sh.setAttacks(str(r3), attacks_r3)
+            # taxi_sh.setArguments(str(r3), [str(r3), "not_service", "role(taxi)"])
+            # taxi_sh.setAttacks(str(r3), attacks_r3)
 
             law = Stakeholder("Law")
-            law.addNorm(r1)
+            # law.addNorm(r1)
             law.addNorm(r2)
-            law.addNorm(r3)
+            # law.addNorm(r3)
             law.addConstitutiveNorm(r2, cl2)
-            law.addConstitutiveNorm(r3, cl1)
+            # law.addConstitutiveNorm(r3, cl1)
 
-            law.afs[str(r1)] = AF()
+            # law.afs[str(r1)] = AF()
             law.afs[str(r2)] = AF()
-            law.afs[str(r3)] = AF()
-            law.setArguments(str(r1), [str(r1)])
+            # law.afs[str(r3)] = AF()
+            # law.setArguments(str(r1), [str(r1)])
             law.setArguments(str(r2), [str(r2), "no_exception"])
             law.setAttacks(str(r2), attacks_r2)
-            law.setArguments(str(r3), [str(r3), "parking_near"])
-            law.setAttacks(str(r3), attacks_r3)
+            # law.setArguments(str(r3), [str(r3), "parking_near"])
+            # law.setAttacks(str(r3), attacks_r3)
 
             taxi.addStakeholder(taxi_sh)
             taxi.addStakeholder(law)
@@ -380,13 +470,16 @@ class Environment:
             for s in speeds:
                 actions.append((m, s))
 
+        for agent in self.agents:
+            agent.responsible = False
+
         self.doAction = self.doAction_2  # change action method for taxi
 
         self.objects["parking"] = self.makeObject()
         self.objects["parking"]["pos"] = [7, 3]
         self.objects["parking"]["symbol"] = "P"
         self.objects["parking"]["flags"] = ["parked", "pick"]
-        self.objects["parking"]["reward"] = -5 #+ 50
+        self.objects["parking"]["reward"] = -5 + 50
         self.objects["parking"]["inv_add"] = ["passenger"]
         self.objects["parking"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -394,7 +487,7 @@ class Environment:
         self.objects["street"]["pos"] = [5, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["pick"]
-        self.objects["street"]["reward"] = 0 #+ 50
+        self.objects["street"]["reward"] = 0 + 50
         self.objects["street"]["inv_add"] = ["passenger"]
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -560,7 +653,10 @@ class Environment:
                     signals_total[k] = 0
                 signals_total[k] += v
             if display:
-                print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
+                if self.iterations + 1 == 1:
+                    print(f"\033[92mRun '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}\033[0m")
+                else:
+                    print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
                 for agent in self.agents:
                     print(f"{agent.name}: Action={agent.getLastAction()}  Signal={agent.getLastSignal()}  Inv: {agent.getInventory()}")
                 self.display()
@@ -577,7 +673,7 @@ class Environment:
 
         # movingAverage of the tracked Q-Functions
         evolution = {}
-        qfunctions = ['R', 'V']
+        qfunctions = ['R', 'A', 'V']
         window = self.window
         if window > self.steps:
             window = int(self.steps / 20)
@@ -658,7 +754,7 @@ class Environment:
 
             if id(agent) == id(self.agents[0]):  # only for the first agent
                 agent.clearOverrides()
-                self.override_1 = rd.random() < 0.1
+                self.override_1 = rd.random() < -0.1
                 self.override_3 = self.override_2
                 self.override_2 = False
                 pass
@@ -688,14 +784,29 @@ class Environment:
             if self.override_3:
                 agent.overrideJudgement("F(['speeding'])", self.override_3)
                 pass
+            action = all_actions[i]
             state = all_states[i]
             state_dict = all_states_dict[i]
             next_state = all_next_states[i - 1]
             next_state_dict = all_next_states_dict[i - 1]
             if self.debug_judgement:
-                print("State:",state)
+                # print("State:",state)
                 # print("Q-Functions:", agent.printQFunctions(state))
-            all_signals[i]['V'] = agent.judge(next_state_dict, all_flags[i], self.debug_judgement)  # judges the consequences
+                pass
+            signals = agent.judge(next_state_dict, all_flags[i], self.debug_judgement)  # judges the consequences
+            
+            agent.updateResponsible(state, action)
+            all_signals[i]['D'] = sum(signals['D'].values())
+            agent.agent.updateQValue2('D', state, action, all_signals[i]['D'], next_state)
+
+            all_signals[i]['A'] = sum(signals['A'].values())
+            if not agent.responsible:
+                all_signals[i]['A'] = 0
+            if 'A' not in agent.agent.preferences:
+                agent.agent.updateQValue('A', state, action, all_signals[i]['A'], next_state)
+
+            # violations
+            all_signals[i]['V'] = sum(signals['V'].values())
             optimalAction = agent.selectBestAction(next_state)
             if optimalAction is not None:
                 if agent.isOptimal:
@@ -851,30 +962,30 @@ class Environment:
         reward = 0
         movement = action[0]
         speed = action[1]
-        
-        if speed == "fast":
+
+        if speed in ["fast", "+"]:
             reward -= 0.5
-        elif speed == "slow":
+        elif speed in ["slow", "-"]:
             reward -= 1
-        # if not agent.has("passenger"):
-        #     reward = 0
+        if not agent.has("passenger"):
+            reward = 0
         
-        if movement == "up":
+        if movement in ["up", "^"]:
             if pos[1] > 0 and self.grid[pos[1] - 1][pos[0]].type != WALL:
                 pos[1] -= 1
             else:
                 reward -= 10
-        elif movement == "down":
+        elif movement in ["down", "v"]:
             if pos[1] < self.height - 1 and self.grid[pos[1] + 1][pos[0]].type != WALL:
                 pos[1] += 1
             else:
                 reward -= 10
-        elif movement == "left":
+        elif movement in ["left", "<"]:
             if pos[0] > 0 and self.grid[pos[1]][pos[0] - 1].type != WALL:
                 pos[0] -= 1
             else:
                 reward -= 10
-        elif movement == "right":
+        elif movement in ["right", ">"]:
             if pos[0] < self.width - 1 and self.grid[pos[1]][pos[0] + 1].type != WALL:
                 pos[0] += 1
             else:

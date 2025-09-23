@@ -17,8 +17,8 @@ class QAgent:
         self.epsilon = 1.0
         self.min_epsilon = 0.1  # minimum epsilon value
         self.epsilon_decay = 0
-        self.alpha = 0.05  #0.05
-        self.gamma = 0.99
+        self.alpha = 0.1
+        self.gamma = 1#0.99
 
         self.isRandom = False
         self.optimal = False
@@ -75,10 +75,11 @@ class QAgent:
             if q not in self.Q:
                 raise ValueError(f"Q-function '{q}' does not exist. Existing Q-functions: {list(self.Q.keys())}")
 
-    def addQFunction(self, name):
+    def addQFunction(self, name, no_ordering=False):
         if name not in self.Q:
             self.Q[name] = {}
-            self.preferences.append(name)
+            if not no_ordering:
+                self.preferences.append(name)
         else:
             raise ValueError(f"Q-function '{name}' already exists.")
 
@@ -115,7 +116,8 @@ class QAgent:
         if self.selection_method == "tlex":
             return self.thresholdLexicographic(state)
         if self.selection_method == "dlex":
-            return self.deltaLexicographic(state, 0.1, True)
+            return self.deltaLexicographic(state, 10, False)  # percent
+            # return self.deltaLexicographic(state, 1, True)
 
     def lexicographic(self, state):
         actions = cp.deepcopy(self.actions)
@@ -142,7 +144,7 @@ class QAgent:
             # print(actions, end="->")
             if i == len(self.preferences) - 1:
                 # last preference, no tolerance
-                t = 0
+                t = t#0
             actions = self.getBestActions(q, state, actions, t, fixed)
         # print(actions)
         return actions
@@ -174,6 +176,33 @@ class QAgent:
             qvalues[action] = 0.0
         self.Q[q][state] = qvalues
 
+        if q not in self.preferences or q != self.preferences[-1]:
+            return  # skip decay
+        if self.decay_method == "linear":
+            self.epsilon -= self.epsilon_decay
+        elif self.decay_method == "exponential":
+            self.epsilon *= self.epsilon_decay
+        self.epsilon = max(self.min_epsilon, self.epsilon)
+
+    def updateQValue2(self, q, state, action, reward, next_state, optimal_action=None):
+        # Hash the state if it's a list (to use as a dict key)
+        # Flatten state and next_state if they are lists of lists, then hash as tuple
+        qvalues = self.getQValues(q, state)
+        if action not in qvalues:
+            for a in self.actions:
+                qvalues[a] = 0.0
+        # max_next_q accounts for optimal_action if not None, else takes max
+        max_next_q = max(self.getQValues(q, next_state).values(), default=0)
+        if optimal_action is not None:
+            max_next_q = self.getQValues(q, next_state).get(optimal_action, 0)
+        qvalues[action] += self.alpha * (min(reward, max_next_q) - qvalues[action])
+        qvalues[action] = round(qvalues[action], 2)
+        if qvalues[action] == -0.0:
+            qvalues[action] = 0.0
+        self.Q[q][state] = qvalues
+
+        if q not in self.preferences or q != self.preferences[-1]:
+            return  # skip decay
         if self.decay_method == "linear":
             self.epsilon -= self.epsilon_decay
         elif self.decay_method == "exponential":
@@ -189,6 +218,13 @@ class QAgent:
                 raise ValueError(f"Signal '{q}' not found in signals. Available signals: {list(signals.keys())}")
             self.updateQValue(q, state, action, signals[q], next_state, optimal_action)
 
+    def printQFunction(self, qfunction, state, rounding=2):
+        qvalues = cp.deepcopy(self.getQValues(qfunction, state))
+        for qvalue in qvalues:
+            qvalues[qvalue] = round(qvalues[qvalue], rounding)
+        formatted_qvalues = {",".join(str(x) for x in qvalue): round(qvalues[qvalue], rounding) for qvalue in qvalues}
+        print("Q_" + qfunction + ": " + " | ".join([f"{k}={v}" for k, v in formatted_qvalues.items()]))
+
     def printQFunctions(self, state):
         rounding = 2
         print(f"Q-functions for agent {id(self)}:")
@@ -196,8 +232,15 @@ class QAgent:
             qvalues = cp.deepcopy(self.getQValues(q, state))
             for qvalue in qvalues:
                 qvalues[qvalue] = round(qvalues[qvalue], rounding)
-            print(f"Q_{q}: {qvalues}")
+            self.printQFunction(q, state, rounding)
         print("Optimal action:", self.selectBestAction(state))
+        print("Non-Ordered")
+        for q in self.Q:
+            if q not in self.preferences:
+                qvalues = cp.deepcopy(self.getQValues(q, state))
+                for qvalue in qvalues:
+                    qvalues[qvalue] = round(qvalues[qvalue], rounding)
+                self.printQFunction(q, state, rounding)
 
     def has(self, item):
         return item in self.inventory

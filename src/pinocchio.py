@@ -158,6 +158,7 @@ class Pinocchio:
         self.norms = []
         self.facts = {}
         self.override = {}
+        self.responsible = False  # whether the agent is responsible for its actions
 
     def judge(self, state, flags, debug=False):
         # add all rnorms to the facts
@@ -167,22 +168,24 @@ class Pinocchio:
         # apply the epsilon function to get the facts
         facts.extend(self.epsilon(state, flags))
         if debug:
-            print("JUDGES", self.name, id(self.agent))
-            print("Inv.:", self.getInventory())
-            print("Last action:", self.getLastAction())
-            print("Flags:", flags)
-            print("Brute:", facts)
+            # print("JUDGES", self.name, id(self.agent))
+            # print("Inv.:", self.getInventory())
+            # print("Last action:", self.getLastAction())
+            # print("Flags:", flags)
+            # print("Brute:", facts)
             inst = {}
             for rnorm in self.norms:
                 inst[str(rnorm)] = []
                 for stakeholder in self.stakeholders:
                     inst[str(rnorm)].extend(stakeholder.closure(rnorm, facts))
                 inst[str(rnorm)] = list(set(inst[str(rnorm)]))
-                print("Inst.", str(rnorm), ":", inst[str(rnorm)])
+                # print("Inst.", str(rnorm), ":", inst[str(rnorm)])
             # for each norm
         # get the activate arguments, and combine the AFs of each stakeholders
         # then judges
         violations = {}
+        noncompliances = {}
+        defeats = {}
         for rnorm in self.norms:
 
             violations[str(rnorm)] = 0
@@ -213,6 +216,12 @@ class Pinocchio:
             if str(rnorm) in self.override:
                 normActive = self.override[str(rnorm)]
 
+            if not normActive:  # maybe add the condition for the header to be in the facts
+                defeats[str(rnorm)] = -1
+            
+            if normActive and not rnorm.comply(all_facts):
+                noncompliances[str(rnorm)] = -1
+
             if normActive and not rnorm.comply(all_facts):
                 violations[str(rnorm)] = -rnorm.weight
                 didViolation = True
@@ -220,7 +229,7 @@ class Pinocchio:
                 print("Violates", str(rnorm), ":", didViolation, '| Extension:', extension)
                 pass
 
-        return sum(violations.values())  # return the sum of violated norms' weights
+        return {'V': violations, 'A': noncompliances, 'D': defeats}
     
     def addFact(self, fact_name, fun):
         if fact_name not in self.facts:
@@ -271,6 +280,24 @@ class Pinocchio:
         self.agent = QAgent(self.name)
         self.agent.addQFunction("V")
         self.agent.addQFunction("R")
+        self.agent.initDecay(steps)
+        self.agent.selection_method = "dlex"
+
+    def loadNonAvoidantAgent(self, steps):
+        self.agent = QAgent(self.name)
+        self.agent.addQFunction("V")
+        self.agent.addQFunction("A")
+        self.agent.addQFunction("R")
+        self.agent.addQFunction("D", no_ordering=True)
+        self.agent.initDecay(steps)
+        self.agent.selection_method = "lex"
+
+    def loadAvoidantAgent(self, steps):
+        self.agent = QAgent(self.name)
+        self.agent.addQFunction("V")
+        self.agent.addQFunction("A", no_ordering=True)
+        self.agent.addQFunction("R")
+        self.agent.addQFunction("D", no_ordering=True)
         self.agent.initDecay(steps)
         self.agent.selection_method = "lex"
 
@@ -327,3 +354,12 @@ class Pinocchio:
     
     def has(self, item):
         return self.agent.has(item)
+    
+    def updateResponsible(self, state, action):
+        possible = []
+        qvs = self.getQValues('D', state)
+        for q in qvs:
+            if qvs[q] == max(qvs.values()):
+                possible.append(q)
+        if action not in possible:
+            self.responsible = True
