@@ -357,7 +357,7 @@ class Environment:
         self.window = 10
         
         if reset_agent:
-            self.steps = 2000000#500000
+            self.steps = 6000000#500000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             # self.loadFile("src/environments/taxi_10x10_blocked.txt")
@@ -369,13 +369,13 @@ class Environment:
             self.agents.append(taxi)
 
             # r norms
-            # r1 = RegulativeNorm("F", "pavement")
+            r1 = RegulativeNorm("F", "pavement")
             r2 = RegulativeNorm("F", "speeding")
-            # r3 = RegulativeNorm("F", "stop", "road")
+            r3 = RegulativeNorm("F", "stop", "road")
 
-            # taxi.addNorm(r1)
+            taxi.addNorm(r1)
             taxi.addNorm(r2)
-            # taxi.addNorm(r3)
+            taxi.addNorm(r3)
 
             # c norms Taxi
             ct1 = ConstitutiveNorm("role(taxi)")
@@ -412,53 +412,53 @@ class Environment:
             taxi.addFact("dist_parking_<_4", funfacts.parking_close)
             # taxi.addFact("in_city", lambda state, flags: True)
 
-            # attacks_r1 = []
+            attacks_r1 = []
             attacks_r2 = [("late", str(r2)), ("no_traffic", str(r2)), ("no_exception", "late"), ("no_exception", "no_traffic")]
-            # attacks_r3 = [("role(taxi)", str(r3)), ("not_service", "role(taxi)"), ("parking_near", "role(taxi)")]
+            attacks_r3 = [("role(taxi)", str(r3)), ("not_service", "role(taxi)"), ("parking_near", "role(taxi)")]
 
             # stakeholders
             taxi_sh = Stakeholder("Taxi")
-            # taxi_sh.addNorm(r1)
+            taxi_sh.addNorm(r1)
             taxi_sh.addNorm(r2)
-            # taxi_sh.addNorm(r3)
+            taxi_sh.addNorm(r3)
 
             taxi_sh.addConstitutiveNorm(r2, ct4)
             taxi_sh.addConstitutiveNorm(r2, ct5)
             taxi_sh.addConstitutiveNorm(r2, ct8)
             taxi_sh.addConstitutiveNorm(r2, ct9)
 
-            # taxi_sh.addConstitutiveNorm(r3, ct1)
-            # taxi_sh.addConstitutiveNorm(r3, ct2)
-            # taxi_sh.addConstitutiveNorm(r3, ct3)
-            # taxi_sh.addConstitutiveNorm(r3, ct6)
-            # taxi_sh.addConstitutiveNorm(r3, ct10)
-            # taxi_sh.addConstitutiveNorm(r3, ct11)
+            taxi_sh.addConstitutiveNorm(r3, ct1)
+            taxi_sh.addConstitutiveNorm(r3, ct2)
+            taxi_sh.addConstitutiveNorm(r3, ct3)
+            taxi_sh.addConstitutiveNorm(r3, ct6)
+            taxi_sh.addConstitutiveNorm(r3, ct10)
+            taxi_sh.addConstitutiveNorm(r3, ct11)
 
-            # taxi_sh.afs[str(r1)] = AF()
+            taxi_sh.afs[str(r1)] = AF()
             taxi_sh.afs[str(r2)] = AF()
-            # taxi_sh.afs[str(r3)] = AF()
+            taxi_sh.afs[str(r3)] = AF()
 
-            # taxi_sh.setArguments(str(r1), [str(r1)])
+            taxi_sh.setArguments(str(r1), [str(r1)])
             taxi_sh.setArguments(str(r2), [str(r2), "no_traffic", "late"])
             taxi_sh.setAttacks(str(r2), attacks_r2)
-            # taxi_sh.setArguments(str(r3), [str(r3), "not_service", "role(taxi)"])
-            # taxi_sh.setAttacks(str(r3), attacks_r3)
+            taxi_sh.setArguments(str(r3), [str(r3), "not_service", "role(taxi)"])
+            taxi_sh.setAttacks(str(r3), attacks_r3)
 
             law = Stakeholder("Law")
-            # law.addNorm(r1)
+            law.addNorm(r1)
             law.addNorm(r2)
-            # law.addNorm(r3)
+            law.addNorm(r3)
             law.addConstitutiveNorm(r2, cl2)
-            # law.addConstitutiveNorm(r3, cl1)
+            law.addConstitutiveNorm(r3, cl1)
 
-            # law.afs[str(r1)] = AF()
+            law.afs[str(r1)] = AF()
             law.afs[str(r2)] = AF()
-            # law.afs[str(r3)] = AF()
-            # law.setArguments(str(r1), [str(r1)])
+            law.afs[str(r3)] = AF()
+            law.setArguments(str(r1), [str(r1)])
             law.setArguments(str(r2), [str(r2), "no_exception"])
             law.setAttacks(str(r2), attacks_r2)
-            # law.setArguments(str(r3), [str(r3), "parking_near"])
-            # law.setAttacks(str(r3), attacks_r3)
+            law.setArguments(str(r3), [str(r3), "parking_near"])
+            law.setAttacks(str(r3), attacks_r3)
 
             taxi.addStakeholder(taxi_sh)
             taxi.addStakeholder(law)
@@ -469,9 +469,6 @@ class Environment:
         for m in movements:
             for s in speeds:
                 actions.append((m, s))
-
-        for agent in self.agents:
-            agent.responsible = False
 
         self.doAction = self.doAction_2  # change action method for taxi
 
@@ -503,6 +500,7 @@ class Environment:
 
         for agent in self.agents:
             agent.resetInventory()
+            agent.responsible = False
             agent.setActions(actions)
             agent.setLastAction(None)  # reset last action
             agent.setLastSignal(None)  # reset last signal
