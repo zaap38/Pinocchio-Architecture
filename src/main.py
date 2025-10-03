@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # mini_taxi
     # taxi
     # avoidant_taxi
-    preset = "taxi"
+    preset = "avoidant_taxi"
 
     env.loadPreset(preset, reset_agent=True)
 
@@ -28,8 +28,8 @@ if __name__ == "__main__":
     # env.loadPreset(preset, reset_agent=False)
     # env.run(display=False, run_title="Convergence")
 
-    env.debug = True
-    env.debug_judgement = True
+    env.debug = 0
+    env.debug_judgement = 0
     env.setOptimal(True)
     env.setLearning(False)
     env.setSteps(10)

@@ -271,8 +271,8 @@ class Environment:
         self.window = 10
         
         if reset_agent:
-            self.steps = 200000
-            self.timeout = 40
+            self.steps = 50000
+            self.timeout = 20
             self.loadFile("src/environments/taxi_5x5.txt")
             # self.loadFile("src/environments/taxi_10x10_blocked.txt")
             taxi = Pinocchio("Taxi")
@@ -286,18 +286,18 @@ class Environment:
 
             taxi.addNorm(r2)
             ct4 = ConstitutiveNorm("evening", "late")
-            ct6 = ConstitutiveNorm("time_0-10", "morning")
-            ct7 = ConstitutiveNorm("time_11-20", "day")
-            ct8 = ConstitutiveNorm("time_21-30", "evening")
-            ct9 = ConstitutiveNorm("time_31-40", "night")
+            ct6 = ConstitutiveNorm("time_0-5", "morning")
+            ct7 = ConstitutiveNorm("time_6-10", "day")
+            ct8 = ConstitutiveNorm("time_11-15", "evening")
+            ct9 = ConstitutiveNorm("time_16-20", "evening")
 
             # facts
             taxi.addFact("speeding", lambda state, flags: state["actions"].get(taxi.name)[1] in ["fast", "+"])
             taxi.addFact("has_passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
-            taxi.addFact("time_0-10", lambda state, flags: state["iterations"] <= 10)
-            taxi.addFact("time_11-20", lambda state, flags: 10 < state["iterations"] <= 20)
-            taxi.addFact("time_21-30", lambda state, flags: 20 < state["iterations"] <= 30)
-            taxi.addFact("time_31-40", lambda state, flags: 30 < state["iterations"] <= 40)
+            taxi.addFact("time_0-5", lambda state, flags: state["iterations"] <= 5)
+            taxi.addFact("time_6-10", lambda state, flags: 5 < state["iterations"] <= 10)
+            taxi.addFact("time_11-15", lambda state, flags: 10 < state["iterations"] <= 15)
+            taxi.addFact("time_16-20", lambda state, flags: 15 < state["iterations"] <= 20)
 
             attacks_r2 = [("late", str(r2))]
 
@@ -335,7 +335,7 @@ class Environment:
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
 
         self.objects["destination"] = self.makeObject()
-        self.objects["destination"]["pos"] = [1, 3]
+        self.objects["destination"]["pos"] = [3, 3]
         self.objects["destination"]["symbol"] = "D"
         self.objects["destination"]["reward"] = 100
         self.objects["destination"]["inv_add"] = ["dropped"]
@@ -962,9 +962,9 @@ class Environment:
         speed = action[1]
 
         if speed in ["fast", "+"]:
-            reward -= 0.5
+            reward -= 5
         elif speed in ["slow", "-"]:
-            reward -= 1
+            reward -= 10
         if not agent.has("passenger"):
             reward = 0
         
