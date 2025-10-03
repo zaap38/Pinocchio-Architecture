@@ -14,13 +14,15 @@ ROAD = 1
 PLAIN = 2
 PACMAN = 3
 OBJECT = 4
+RANDOM = 5
 
 
 SYMBOLS = {
     WALL: "#",
     ROAD: " ",
     PLAIN: "-",
-    PACMAN: "O"
+    PACMAN: "O",
+    RANDOM: "@"
 }
 
 
@@ -267,25 +269,30 @@ class Environment:
 
     def loadTaxi(self, reset_agent=True):
 
-        self.window = 600
+        self.window = 5000
         
         if reset_agent:
-            self.steps = 2000000#500000
+            self.steps = 5000000#500000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
             taxi.loadNormativeAgent(self.steps)
             self.agents.append(taxi)
+            randAgent = Pinocchio("Random")
+            randAgent.agent.isRandom = True
+            self.agents.append(randAgent)
 
             # r norms
             r1 = RegulativeNorm("F", "pavement")
             r2 = RegulativeNorm("F", "speeding")
             r3 = RegulativeNorm("F", "stop", "road")
+            r4 = RegulativeNorm("F", "accident")
 
             taxi.addNorm(r1)
             taxi.addNorm(r2)
             taxi.addNorm(r3)
+            taxi.addNorm(r4)
 
             # c norms Taxi
             ct1 = ConstitutiveNorm("role(taxi)")
@@ -303,6 +310,7 @@ class Environment:
             # c norms Law
             cl1 = ConstitutiveNorm("dist_parking_<_4", "parking_near")
             cl2 = ConstitutiveNorm("in_city", "no_exception")
+            cl3 = ConstitutiveNorm("collision", "accident")
 
             # facts
             taxi.addFact("pavement", lambda state, flags:
@@ -321,16 +329,19 @@ class Environment:
             taxi.addFact("time_51-60", lambda state, flags: 50 < state["iterations"])
             taxi.addFact("dist_parking_<_4", funfacts.parking_close)
             # taxi.addFact("in_city", lambda state, flags: True)
+            taxi.addFact("collision", lambda state, flags: "collision" in flags)
 
             attacks_r1 = []
             attacks_r2 = [("late", str(r2)), ("no_traffic", str(r2)), ("no_exception", "late"), ("no_exception", "no_traffic")]
             attacks_r3 = [("role(taxi)", str(r3)), ("not_service", "role(taxi)"), ("parking_near", "role(taxi)")]
+            attacks_r4 = []
 
             # stakeholders
             taxi_sh = Stakeholder("Taxi")
             taxi_sh.addNorm(r1)
             taxi_sh.addNorm(r2)
             taxi_sh.addNorm(r3)
+            taxi_sh.addNorm(r4)
 
             taxi_sh.addConstitutiveNorm(r2, ct4)
             taxi_sh.addConstitutiveNorm(r2, ct5)
@@ -353,22 +364,28 @@ class Environment:
             taxi_sh.setAttacks(str(r2), attacks_r2)
             taxi_sh.setArguments(str(r3), [str(r3), "not_service", "role(taxi)"])
             taxi_sh.setAttacks(str(r3), attacks_r3)
+            taxi_sh.setArguments(str(r4), [str(r4)])
 
             law = Stakeholder("Law")
+
             law.addNorm(r1)
             law.addNorm(r2)
             law.addNorm(r3)
+            law.addNorm(r4)
             law.addConstitutiveNorm(r2, cl2)
             law.addConstitutiveNorm(r3, cl1)
+            law.addConstitutiveNorm(r4, cl3)
 
             law.afs[str(r1)] = AF()
             law.afs[str(r2)] = AF()
             law.afs[str(r3)] = AF()
+            law.afs[str(r4)] = AF()
             law.setArguments(str(r1), [str(r1)])
             law.setArguments(str(r2), [str(r2), "no_exception"])
             law.setAttacks(str(r2), attacks_r2)
             law.setArguments(str(r3), [str(r3), "parking_near"])
             law.setAttacks(str(r3), attacks_r3)
+            law.setArguments(str(r4), [str(r4)])
 
             taxi.addStakeholder(taxi_sh)
             taxi.addStakeholder(law)
@@ -408,13 +425,13 @@ class Environment:
         self.objects["destination"]["flags"] = ["drop"]
         self.objects["destination"]["global_flags"] = ["end"]
 
-        for agent in self.agents:
+        for i, agent in enumerate(self.agents):
             agent.resetInventory()
             agent.setActions(actions)
             agent.setLastAction(None)  # reset last action
             agent.setLastSignal(None)  # reset last signal
             # agent.isRandom = True  # comment this
-            self.setPos(agent, [1, 1])
+            self.setPos(agent, [i + 1, i + 1])
             # self.setPos(agent, [rd.randint(1, self.width - 2), rd.randint(1, self.height - 2)])  # default position
 
     def loadPacman(self, reset_agent=True):
@@ -521,7 +538,8 @@ class Environment:
         cp_grid = cp.deepcopy(self.grid)
         for agent in self.agents:
             pos = self.pos[agent.name]
-            cp_grid[pos[1]][pos[0]].setType(PACMAN)
+            typeToSet = PACMAN if not agent.agent.isRandom else RANDOM
+            cp_grid[pos[1]][pos[0]].setType(typeToSet)
         for obj_name, obj in self.objects.items():
             pos = obj["pos"]
             cp_grid[pos[1]][pos[0]].setType(OBJECT)
@@ -656,7 +674,7 @@ class Environment:
             all_flags.append(flags)
             all_gflags.append(gflags)
 
-            if id(agent) == id(self.agents[0]):  # only for the first agent
+            if False and id(agent) == id(self.agents[0]):  # only for the first agent
                 agent.clearOverrides()
                 self.override_1 = rd.random() < 0.1
                 self.override_3 = self.override_2
@@ -885,5 +903,11 @@ class Environment:
         reward_handle, flags, global_flags = self.handleObjectsOnPosition(agent)
         reward += reward_handle
         flags.append("road" if self.grid[pos[1]][pos[0]].type == ROAD else "pavement")
+
+        for other in self.agents:
+            if other.name != agent.name and self.pos[other.name] == pos:
+                flags.append("collision")
+                break
+
         signals = {"R": reward, "V": 0}
         return signals, flags, global_flags
