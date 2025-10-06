@@ -158,7 +158,7 @@ class Pinocchio:
         self.norms = []
         self.facts = {}
         self.override = {}
-        self.responsible = False  # whether the agent is responsible for its actions
+        self.responsible = {}  # whether the agent is responsible for its actions
 
     def judge(self, state, flags, debug=False):
         # add all rnorms to the facts
@@ -216,8 +216,7 @@ class Pinocchio:
             if str(rnorm) in self.override:
                 normActive = self.override[str(rnorm)]
 
-            if not normActive:  # maybe add the condition for the header to be in the facts
-                defeats[str(rnorm)] = -1
+            defeats[str(rnorm)] = -1 if not normActive else 0  # maybe add the condition for the header to be in the facts
             if not rnorm.comply(all_facts):
                 noncompliances[str(rnorm)] = -1
 
@@ -225,11 +224,11 @@ class Pinocchio:
                 violations[str(rnorm)] = -rnorm.weight
                 didViolation = True
             if debug:
-                print("Avoidance condition:", rnorm.comply(all_facts))
-                print("Responsible:", self.responsible)
+                print("Avoidance condition:", rnorm.comply(all_facts), end=' | ')
+                print("Responsible:", self.responsible[str(rnorm)])
                 print("Violates", str(rnorm), ":", didViolation, '| Extension:', extension)
                 pass
-
+            
         return {'V': violations, 'A': noncompliances, 'D': defeats}
     
     def addFact(self, fact_name, fun):
@@ -308,6 +307,7 @@ class Pinocchio:
     def addNorm(self, norm):
         # add regulative norm
         self.norms.append(norm)
+        self.responsible[str(norm)] = False
 
     def getInventory(self):
         return self.agent.getInventory()
@@ -341,8 +341,12 @@ class Pinocchio:
     def setLastSignal(self, signal):
         self.agent.setLastSignal(signal)
 
-    def printQFunctions(self, state):
-        self.agent.printQFunctions(state)
+    def printQFunctions(self, state, rounding=3):
+        rnorms = []
+        for norm in self.norms:
+            if type(norm) is RegulativeNorm:
+                rnorms.append(str(norm))
+        self.agent.printQFunctions(state, rnorms)
 
     def setOptimal(self, optimal):
         self.agent.optimal = optimal
@@ -363,4 +367,4 @@ class Pinocchio:
             if qvs[q] == max(qvs.values()):
                 possible.append(q)
         if action not in possible:
-            self.responsible = True
+            self.responsible[state[1]] = True

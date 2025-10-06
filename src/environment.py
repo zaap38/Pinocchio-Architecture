@@ -278,13 +278,20 @@ class Environment:
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
             # taxi.loadNormativeAgent(self.steps)
-            # taxi.loadNonAvoidantAgent(self.steps)
-            taxi.loadAvoidantAgent(self.steps)
+            taxi.loadNonAvoidantAgent(self.steps)
+            # taxi.loadAvoidantAgent(self.steps)
             self.agents.append(taxi)
             
+            r1 = RegulativeNorm("F", "pavement")
             r2 = RegulativeNorm("F", "speeding")
+            # r3 = RegulativeNorm("F", "stop", "road")
 
+            taxi.addNorm(r1)
             taxi.addNorm(r2)
+            # taxi.addNorm(r3)
+            
+            ct1 = ConstitutiveNorm("role(taxi)")
+            ct2 = ConstitutiveNorm("morning", "not_service")
             ct4 = ConstitutiveNorm("evening", "late")
             ct6 = ConstitutiveNorm("time_0-5", "morning")
             ct7 = ConstitutiveNorm("time_6-10", "day")
@@ -292,6 +299,12 @@ class Environment:
             ct9 = ConstitutiveNorm("time_16-20", "evening")
 
             # facts
+            taxi.addFact("road", lambda state, flags:
+                state["grid"][state["pos"]["Taxi"][1]][state["pos"]["Taxi"][0]] == ROAD)
+            taxi.addFact("stop", lambda state, flags: "pick" in flags or "drop" in flags)
+            taxi.addFact("role(taxi)", lambda state, flags: True)
+            taxi.addFact("pavement", lambda state, flags:
+                state["grid"][state["pos"]["Taxi"][1]][state["pos"]["Taxi"][0]] == PLAIN)
             taxi.addFact("speeding", lambda state, flags: state["actions"].get(taxi.name)[1] in ["fast", "+"])
             taxi.addFact("has_passenger", lambda state, flags: "passenger" in state["inventory"][taxi.name])
             taxi.addFact("time_0-5", lambda state, flags: state["iterations"] <= 5)
@@ -299,11 +312,15 @@ class Environment:
             taxi.addFact("time_11-15", lambda state, flags: 10 < state["iterations"] <= 15)
             taxi.addFact("time_16-20", lambda state, flags: 15 < state["iterations"] <= 20)
 
+            attacks_r1 = []
             attacks_r2 = [("late", str(r2))]
+            # attacks_r3 = [("role(taxi)", str(r3)), ("not_service", "role(taxi)"), ("parking_near", "role(taxi)")]
 
             # stakeholders
             taxi_sh = Stakeholder("Taxi")
+            taxi_sh.addNorm(r1)
             taxi_sh.addNorm(r2)
+            # taxi_sh.addNorm(r3)
 
             taxi_sh.addConstitutiveNorm(r2, ct4)
             taxi_sh.addConstitutiveNorm(r2, ct6)
@@ -311,9 +328,24 @@ class Environment:
             taxi_sh.addConstitutiveNorm(r2, ct8)
             taxi_sh.addConstitutiveNorm(r2, ct9)
 
+            # taxi_sh.addConstitutiveNorm(r3, ct1)
+            # taxi_sh.addConstitutiveNorm(r3, ct2)
+            # taxi_sh.addConstitutiveNorm(r3, ct6)
+            # taxi_sh.addConstitutiveNorm(r3, ct7)
+            # taxi_sh.addConstitutiveNorm(r3, ct8)
+            # taxi_sh.addConstitutiveNorm(r3, ct9)
+
+            taxi_sh.afs[str(r1)] = AF()
+            taxi_sh.setArguments(str(r1), [str(r1)])
+            taxi_sh.setAttacks(str(r1), attacks_r1)
+
             taxi_sh.afs[str(r2)] = AF()
             taxi_sh.setArguments(str(r2), [str(r2), "late"])
             taxi_sh.setAttacks(str(r2), attacks_r2)
+
+            # taxi_sh.afs[str(r3)] = AF()
+            # taxi_sh.setArguments(str(r3), [str(r3), "not_service", "role(taxi)"])
+            # taxi_sh.setAttacks(str(r3), attacks_r3)
 
             taxi.addStakeholder(taxi_sh)
 
@@ -329,7 +361,7 @@ class Environment:
         self.objects["street"] = self.makeObject()
         self.objects["street"]["pos"] = [3, 1]
         self.objects["street"]["symbol"] = "P"
-        self.objects["street"]["flags"] = ["pick"]
+        self.objects["street"]["flags"] = ["pick", "parked"]
         self.objects["street"]["reward"] = 50
         self.objects["street"]["inv_add"] = ["passenger"]
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
@@ -337,7 +369,7 @@ class Environment:
         self.objects["destination"] = self.makeObject()
         self.objects["destination"]["pos"] = [3, 3]
         self.objects["destination"]["symbol"] = "D"
-        self.objects["destination"]["reward"] = 100
+        self.objects["destination"]["reward"] = 200
         self.objects["destination"]["inv_add"] = ["dropped"]
         self.objects["destination"]["inv_rem"] = ["passenger"]
         self.objects["destination"]["condition"] = ["passenger"]
@@ -346,7 +378,9 @@ class Environment:
 
         for agent in self.agents:
             agent.resetInventory()
-            agent.responsible = False
+            for norm in agent.norms:
+                if type(norm) == RegulativeNorm:
+                    agent.responsible[str(norm)] = False
             agent.setActions(actions)
             agent.setLastAction(None)  # reset last action
             agent.setLastSignal(None)  # reset last signal
@@ -500,7 +534,9 @@ class Environment:
 
         for agent in self.agents:
             agent.resetInventory()
-            agent.responsible = False
+            for norm in agent.norms:
+                if type(norm) == RegulativeNorm:
+                    agent.responsible[str(norm)] = False
             agent.setActions(actions)
             agent.setLastAction(None)  # reset last action
             agent.setLastSignal(None)  # reset last signal
@@ -649,7 +685,7 @@ class Environment:
             for k, v in log.items():
                 if k not in signals_total:
                     signals_total[k] = 0
-                signals_total[k] += v
+                signals_total[k] += v if type(v) in [int, float] else sum(v.values())
             if display:
                 if self.iterations + 1 == 1:
                     print(f"\033[92mRun '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}\033[0m")
@@ -792,14 +828,33 @@ class Environment:
                 # print("Q-Functions:", agent.printQFunctions(state))
                 pass
             signals = agent.judge(next_state_dict, all_flags[i], self.debug_judgement)  # judges the consequences
-            
-            agent.updateResponsible(state, action)
-            all_signals[i]['D'] = sum(signals['D'].values())
-            agent.agent.updateQValue2('D', state, action, all_signals[i]['D'], next_state)
+
+            all_signals[i]['D'] = signals['D']
+            all_signals[i]['A'] = signals['A']
+            all_signals[i]['V'] = sum(signals['V'].values())
+            for key, value in all_signals[i]['D'].items():
+                n_state = (state, key)
+                n_next_state = (next_state, key)
+                agent.updateResponsible(n_state, action)
+                agent.agent.updateQValue2('D', n_state, action, all_signals[i]['D'][key], n_next_state)
+
+            #     all_signals[i]['A'][key] = signals['A'][key]
+            #     if not agent.responsible or signals['V'][key] < 0:
+            #         all_signals[i]['A'][key] = 0
+            #     if 'A' not in agent.agent.preferences:
+            #         agent.agent.updateQValue('A', n_state, action, all_signals[i]['A'][key], n_next_state)
+
+            # if 'A' not in agent.agent.preferences:
+            #     for key in signals['A'].keys():
+            #         n_state = (state, key)
+            #         n_next_state = (next_state, key)
+            #         agent.agent.updateQValue('A', n_state, action, all_signals[i]['A'][key], n_next_state)
 
             all_signals[i]['A'] = sum(signals['A'].values())
-            if not agent.responsible or sum(signals['V'].values()) < 0:
-                all_signals[i]['A'] = 0
+            # does not count the avoidance is agent not responsible or norm violated anyway
+            for key in signals['A'].keys():
+                if not agent.responsible[key] or signals['V'][key] < 0:
+                    all_signals[i]['A'] -= 1
             if 'A' not in agent.agent.preferences:
                 agent.agent.updateQValue('A', state, action, all_signals[i]['A'], next_state)
 
@@ -962,9 +1017,9 @@ class Environment:
         speed = action[1]
 
         if speed in ["fast", "+"]:
-            reward -= 5
-        elif speed in ["slow", "-"]:
             reward -= 10
+        elif speed in ["slow", "-"]:
+            reward -= 50
         if not agent.has("passenger"):
             reward = 0
         

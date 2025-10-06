@@ -15,10 +15,10 @@ class QAgent:
 
         self.decay_method = "linear"
         self.epsilon = 1.0
-        self.min_epsilon = 0.2  # minimum epsilon value
+        self.min_epsilon = 0.05  # minimum epsilon value
         self.epsilon_decay = 0
         self.alpha = 0.1
-        self.gamma = 1#0.99
+        self.gamma = 0.99
 
         self.isRandom = False
         self.optimal = False
@@ -170,6 +170,7 @@ class QAgent:
         max_next_q = max(self.getQValues(q, next_state).values(), default=0)
         if optimal_action is not None:
             max_next_q = self.getQValues(q, next_state).get(optimal_action, 0)
+        # print(q, state[1], reward, max_next_q, qvalues[action])
         qvalues[action] += self.alpha * (reward + self.gamma * max_next_q - qvalues[action])
         qvalues[action] = round(qvalues[action], 2)
         if qvalues[action] == -0.0:
@@ -225,22 +226,32 @@ class QAgent:
         formatted_qvalues = {",".join(str(x) for x in qvalue): round(qvalues[qvalue], rounding) for qvalue in qvalues}
         print("Q_" + qfunction + ": " + " | ".join([f"{k}={v}" for k, v in formatted_qvalues.items()]))
 
-    def printQFunctions(self, state):
+    def printQFunctionWithNorm(self, qfunction, state, rnorm, rounding=2):
+        key = (state, rnorm)
+        qvalues = cp.deepcopy(self.getQValues(qfunction, key))
+        for qvalue in qvalues:
+            qvalues[qvalue] = round(qvalues[qvalue], rounding)
+        formatted_qvalues = {",".join(str(x) for x in qvalue): round(qvalues[qvalue], rounding) for qvalue in qvalues}
+        print(f"Q_{qfunction}({rnorm}): " + " | ".join([f"{k}={v}" for k, v in formatted_qvalues.items()]))
+
+    def printQFunctions(self, state, rnorms=None):
         rounding = 2
         print(f"Q-functions for agent {id(self)}:")
         for q in self.preferences:
-            qvalues = cp.deepcopy(self.getQValues(q, state))
-            for qvalue in qvalues:
-                qvalues[qvalue] = round(qvalues[qvalue], rounding)
-            self.printQFunction(q, state, rounding)
+            if state not in self.Q[q] and rnorms is not None:
+                for rnorm in rnorms:
+                    self.printQFunctionWithNorm(q, state, rnorm, rounding)
+            else:
+                self.printQFunction(q, state, rounding)
         print("Optimal action:", self.selectBestAction(state))
-        print("Non-Ordered")
+        print("Non-Ordered:")
         for q in self.Q:
             if q not in self.preferences:
-                qvalues = cp.deepcopy(self.getQValues(q, state))
-                for qvalue in qvalues:
-                    qvalues[qvalue] = round(qvalues[qvalue], rounding)
-                self.printQFunction(q, state, rounding)
+                if state not in self.Q[q] and rnorms is not None:
+                    for rnorm in rnorms:
+                        self.printQFunctionWithNorm(q, state, rnorm, rounding)
+                else:
+                    self.printQFunction(q, state, rounding)
 
     def has(self, item):
         return item in self.inventory
