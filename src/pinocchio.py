@@ -2,6 +2,7 @@ from qagent import QAgent
 import copy as cp
 import random as rd
 from af import *
+from dqn_agent import DQNAgent
 
 
 class ConstitutiveNorm:
@@ -153,7 +154,8 @@ class Pinocchio:
 
     def __init__(self, name="no_name"):
         self.name = name
-        self.agent = QAgent(name)
+        # self.agent = QAgent(name)
+        self.agent = DQNAgent(name, 101, 8)  # 8 combinations of (direction, speed)
         self.stakeholders = []
         self.norms = []
         self.facts = {}
@@ -247,8 +249,8 @@ class Pinocchio:
     def addStakeholder(self, stakeholder):
         self.stakeholders.append(stakeholder)
 
-    def getAction(self, state):
-        return self.agent.getAction(state)
+    def getAction(self, state, epsilon=0):
+        return self.agent.getAction(state, epsilon)
     
     def selectBestAction(self, state):
         return self.agent.selectBestAction(state)
@@ -256,8 +258,8 @@ class Pinocchio:
     def updateQValue(self, q, state, action, reward, next_state, optimal_action=None):
         self.agent.updateQValue(q, state, action, reward, next_state, optimal_action)
 
-    def updateQFunctions(self, state, action, signals, next_state, optimal_action=None):
-        self.agent.updateQFunctions(state, action, signals, next_state, optimal_action)
+    def updateQFunctions(self, state, action, reward, violation, next_state, done):
+        self.agent.updateQFunctions(state, action, reward, violation, next_state, done)
 
     def setActions(self, actions):
         self.agent.setActions(actions)
@@ -273,6 +275,9 @@ class Pinocchio:
         self.agent.addQFunction("R")
         self.agent.initDecay(steps)
         self.agent.selection_method = "lex"
+
+    def loadDQNAgent(self, steps, agent_type='std'):
+        self.agent = DQNAgent(self.name, 101, 8, agent_type=agent_type)  # 8 combinations of (direction, speed)
 
     def setSteps(self, steps):
         self.agent.initDecay(steps)

@@ -3,6 +3,7 @@ from pinocchio import *
 import time
 import copy as cp
 import random as rd
+import math
 
 import matplotlib.pyplot as plt  # type: ignore
 from tqdm import tqdm  # type: ignore
@@ -272,16 +273,17 @@ class Environment:
         self.window = 5000
         
         if reset_agent:
-            self.steps = 5000000#500000
+            self.steps = 20000 #50000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
-            taxi.loadNormativeAgent(self.steps)
+            # taxi.loadNormativeAgent(self.steps)
+            taxi.loadDQNAgent(self.steps)
             self.agents.append(taxi)
             randAgent = Pinocchio("Random")
             randAgent.agent.isRandom = True
-            self.agents.append(randAgent)
+            # self.agents.append(randAgent)
 
             # r norms
             r1 = RegulativeNorm("F", "pavement")
@@ -403,7 +405,7 @@ class Environment:
         self.objects["parking"]["pos"] = [7, 3]
         self.objects["parking"]["symbol"] = "P"
         self.objects["parking"]["flags"] = ["parked", "pick"]
-        self.objects["parking"]["reward"] = -5 #+ 50
+        self.objects["parking"]["reward"] = 2 #-5 #+ 50
         self.objects["parking"]["inv_add"] = ["passenger"]
         self.objects["parking"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -411,14 +413,14 @@ class Environment:
         self.objects["street"]["pos"] = [5, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["pick"]
-        self.objects["street"]["reward"] = 0 #+ 50
+        self.objects["street"]["reward"] = 5  #+ 0 #+ 50
         self.objects["street"]["inv_add"] = ["passenger"]
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
 
         self.objects["destination"] = self.makeObject()
         self.objects["destination"]["pos"] = [6, 8]
         self.objects["destination"]["symbol"] = "D"
-        self.objects["destination"]["reward"] = 100
+        self.objects["destination"]["reward"] = 100 #100
         self.objects["destination"]["inv_add"] = ["dropped"]
         self.objects["destination"]["inv_rem"] = ["passenger"]
         self.objects["destination"]["condition"] = ["passenger"]
@@ -427,11 +429,11 @@ class Environment:
 
         for i, agent in enumerate(self.agents):
             agent.resetInventory()
-            agent.setActions(actions)
+            # agent.setActions(actions)
             agent.setLastAction(None)  # reset last action
             agent.setLastSignal(None)  # reset last signal
             # agent.isRandom = True  # comment this
-            self.setPos(agent, [i + 1, i + 1])
+            self.setPos(agent, [i + 1, i + 1])  # fix position
             # self.setPos(agent, [rd.randint(1, self.width - 2), rd.randint(1, self.height - 2)])  # default position
 
     def loadPacman(self, reset_agent=True):
@@ -526,8 +528,6 @@ class Environment:
 
     def setSteps(self, steps):
         self.steps = steps
-        for agent in self.agents:
-            agent.setSteps(steps)
 
     def setPos(self, agent_name, pos):
         if type(agent_name) != str:
@@ -564,12 +564,20 @@ class Environment:
 
         signals_total = {}
 
+        print("============== RUN INFO ==============")
+        print(f"Run Title: {run_title}")
+        print(f"Steps: {self.steps}, Timeout: {self.timeout}")
+        print("Rewards:")
+        for obj_name, obj in self.objects.items():
+            print(f"  Object '{obj_name}': Reward={obj['reward']}, Flags={obj['flags']}, Global Flags={obj['global_flags']}, Inv Add={obj['inv_add']}, Inv Rem={obj['inv_rem']}, Condition={obj['condition']}")
+
         while i < self.steps or not reset:
             i += 1
             if pbar is not None:
                 pbar.update(1)
             if display and self.iterations == 0:
-                print("=========VVVVV=========VVVVV=========")
+                # print("=========VVVVV=========VVVVV=========")
+                pass
             log, ending = self.step()
             logs.append(log)
             reset = False
@@ -578,10 +586,12 @@ class Environment:
                     signals_total[k] = 0
                 signals_total[k] += v
             if display:
-                print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
+                # print(f"Run '{run_title}': Iteration {i + 1}/{self.steps} - Step {self.iterations + 1}/{self.timeout}")
                 for agent in self.agents:
-                    print(f"{agent.name}: Action={agent.getLastAction()}  Signal={agent.getLastSignal()}  Inv: {agent.getInventory()}")
+                    # print(f"{agent.name}: Action={agent.getLastAction()}  Signal={agent.getLastSignal()}  Inv: {agent.getInventory()}")
+                    pass
                 self.display()
+                pass
             self.iterations += 1
             if self.iterations >= self.timeout or ending:  # reset the agent every X steps or when "end" flag is triggered
                 self.loadPreset(self.loadedPreset, reset_agent=False)
@@ -612,6 +622,10 @@ class Environment:
         self.historic.append(run_hist)
 
         # self.printRunHistoric(run_hist)
+        a = self.agents[-1].agent
+        if True:
+            print("Loss:")
+            a.print_loss_history(run_title)
 
     def printRunHistoric(self, run_hist):
         signals = {}
@@ -657,13 +671,22 @@ class Environment:
         # sequential
         for agent in self.agents:
             state = self.getState()
+            
+            dqn_state = dict()
+            dqn_state['index'] = state[1]
+
+
             if self.debug:
                 agent.printQFunctions(state)  # print Q-Functions for debugging
             state_dict = self.getStateDict()
             all_states.append(state)
             all_states_dict.append(state_dict)
             
-            action = agent.getAction(state)
+            epsilon_start, epsilon_end, epsilon_decay = 1.0, 0.05, self.steps // 2
+            epsilon = epsilon_end + (epsilon_start - epsilon_end) * \
+                math.exp(-1. * (len(self.historic) * self.steps + self.iterations) / epsilon_decay)
+
+            action = agent.getAction(dqn_state, epsilon)
             agent.setLastAction(action)
             all_actions.append(action)
 
@@ -710,22 +733,21 @@ class Environment:
             state_dict = all_states_dict[i]
             next_state = all_next_states[i - 1]
             next_state_dict = all_next_states_dict[i - 1]
+            
+            dqn_state = dict()
+            dqn_state['index'] = state[1]
+            dqn_next_state = dict()
+            dqn_next_state['index'] = next_state[1]
+
             if self.debug_judgement:
                 print("State:",state)
                 # print("Q-Functions:", agent.printQFunctions(state))
             all_signals[i]['V'] = agent.judge(next_state_dict, all_flags[i], self.debug_judgement)  # judges the consequences
-            optimalAction = agent.selectBestAction(next_state)
-            if optimalAction is not None:
-                if agent.isOptimal:
-                    optimalAction = optimalAction[0]
-                else:
-                    optimalAction = rd.choice(optimalAction)
-                # print("Optimal:", optimalAction)
-            agent.updateQFunctions(state, all_actions[i], all_signals[i], next_state, optimalAction)
+            agent.updateQFunctions(dqn_state, agent.getLastAction(), all_signals[i]['R'], all_signals[i]['V'], dqn_next_state, "end" in all_gflags[i])
             agent.setLastSignal(all_signals[i])
             agent.clearOverrides()
             agent.override_3 = False
-        
+
         ending = False
         for g_flag in all_gflags:
             if "end" in g_flag:
