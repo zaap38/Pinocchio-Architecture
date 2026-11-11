@@ -147,8 +147,10 @@ class QAgent:
         # print(actions)
         return actions
 
-    def getAction(self, state):
-        if self.isRandom or (not self.optimal and (rd.random() < self.epsilon)):
+    def getAction(self, state, epsilon=None):
+        if epsilon is None:
+            epsilon = self.epsilon
+        if self.isRandom or (not self.optimal and (rd.random() < epsilon)):
             return rd.choice(self.actions)
         else:
             best_actions = self.selectBestAction(state)

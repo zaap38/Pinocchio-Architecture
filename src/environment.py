@@ -278,8 +278,8 @@ class Environment:
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
             # taxi.loadOptimalAgent(self.steps)
-            # taxi.loadNormativeAgent(self.steps)
-            taxi.loadDQNAgent(self.steps)
+            taxi.loadNormativeAgent(self.steps)
+            # taxi.loadDQNAgent(self.steps)
             self.agents.append(taxi)
             randAgent = Pinocchio("Random")
             randAgent.agent.isRandom = True
@@ -429,7 +429,7 @@ class Environment:
 
         for i, agent in enumerate(self.agents):
             agent.resetInventory()
-            # agent.setActions(actions)
+            agent.setActions(actions)
             agent.setLastAction(None)  # reset last action
             agent.setLastSignal(None)  # reset last signal
             # agent.isRandom = True  # comment this
@@ -623,9 +623,9 @@ class Environment:
 
         # self.printRunHistoric(run_hist)
         a = self.agents[-1].agent
-        if True:
-            print("Loss:")
-            a.print_loss_history(run_title)
+        # if True:  # for  DQN agent
+        #     print("Loss:")
+        #     a.print_loss_history(run_title)
 
     def printRunHistoric(self, run_hist):
         signals = {}
@@ -672,8 +672,8 @@ class Environment:
         for agent in self.agents:
             state = self.getState()
             
-            dqn_state = dict()
-            dqn_state['index'] = state[1]
+            # dqn_state = dict()
+            # dqn_state['index'] = state[1]
 
 
             if self.debug:
@@ -686,7 +686,8 @@ class Environment:
             epsilon = epsilon_end + (epsilon_start - epsilon_end) * \
                 math.exp(-1. * (len(self.historic) * self.steps + self.iterations) / epsilon_decay)
 
-            action = agent.getAction(dqn_state, epsilon)
+            # action = agent.getAction(dqn_state, epsilon)
+            action = agent.getAction(state, epsilon)
             agent.setLastAction(action)
             all_actions.append(action)
 
@@ -734,16 +735,16 @@ class Environment:
             next_state = all_next_states[i - 1]
             next_state_dict = all_next_states_dict[i - 1]
             
-            dqn_state = dict()
-            dqn_state['index'] = state[1]
-            dqn_next_state = dict()
-            dqn_next_state['index'] = next_state[1]
+            # dqn_state = dict()
+            # dqn_state['index'] = state[1]
+            # dqn_next_state = dict()
+            # dqn_next_state['index'] = next_state[1]
 
             if self.debug_judgement:
                 print("State:",state)
                 # print("Q-Functions:", agent.printQFunctions(state))
             all_signals[i]['V'] = agent.judge(next_state_dict, all_flags[i], self.debug_judgement)  # judges the consequences
-            agent.updateQFunctions(dqn_state, agent.getLastAction(), all_signals[i]['R'], all_signals[i]['V'], dqn_next_state, "end" in all_gflags[i])
+            agent.updateQFunctions(next_state, agent.getLastAction(), all_signals[i]['R'], all_signals[i]['V'], next_state, "end" in all_gflags[i])
             agent.setLastSignal(all_signals[i])
             agent.clearOverrides()
             agent.override_3 = False
