@@ -273,7 +273,7 @@ class Environment:
         self.window = 5000
         
         if reset_agent:
-            self.steps = 20000 #50000
+            self.steps = 2000000
             self.timeout = 60
             self.loadFile("src/environments/taxi_10x10.txt")
             taxi = Pinocchio("Taxi")
@@ -405,7 +405,7 @@ class Environment:
         self.objects["parking"]["pos"] = [7, 3]
         self.objects["parking"]["symbol"] = "P"
         self.objects["parking"]["flags"] = ["parked", "pick"]
-        self.objects["parking"]["reward"] = 2 #-5 #+ 50
+        self.objects["parking"]["reward"] = -5  # -5 time penalty for waiting for the passenger
         self.objects["parking"]["inv_add"] = ["passenger"]
         self.objects["parking"]["condition"] = ["not-passenger", "not-dropped"]
 
@@ -413,14 +413,14 @@ class Environment:
         self.objects["street"]["pos"] = [5, 3]
         self.objects["street"]["symbol"] = "S"
         self.objects["street"]["flags"] = ["pick"]
-        self.objects["street"]["reward"] = 5  #+ 0 #+ 50
+        self.objects["street"]["reward"] = 0
         self.objects["street"]["inv_add"] = ["passenger"]
         self.objects["street"]["condition"] = ["not-passenger", "not-dropped"]
 
         self.objects["destination"] = self.makeObject()
         self.objects["destination"]["pos"] = [6, 8]
         self.objects["destination"]["symbol"] = "D"
-        self.objects["destination"]["reward"] = 100 #100
+        self.objects["destination"]["reward"] = 100
         self.objects["destination"]["inv_add"] = ["dropped"]
         self.objects["destination"]["inv_rem"] = ["passenger"]
         self.objects["destination"]["condition"] = ["passenger"]
@@ -698,6 +698,7 @@ class Environment:
             all_flags.append(flags)
             all_gflags.append(gflags)
 
+            # for Taxi-C (judgement override)
             if False and id(agent) == id(self.agents[0]):  # only for the first agent
                 agent.clearOverrides()
                 self.override_1 = rd.random() < 0.1
@@ -892,11 +893,12 @@ class Environment:
         reward = 0
         movement = action[0]
         speed = action[1]
-        
+
+        TIME_PENALTY = 10
         if speed == "fast":
-            reward -= 0.5
+            reward -= 0.5 * TIME_PENALTY
         elif speed == "slow":
-            reward -= 1
+            reward -= 1 * TIME_PENALTY
         # if not agent.has("passenger"):
         #     reward = 0
         
